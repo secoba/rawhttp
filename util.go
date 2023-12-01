@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/projectdiscovery/rawhttp/client"
 	urlutil "github.com/projectdiscovery/utils/url"
+	"github.com/secoba/rawhttp/client"
 )
 
 // StatusError is a HTTP status error object
@@ -44,6 +44,7 @@ func toRequest(method string, path string, query []string, headers map[string][]
 		Body:    body,
 	}
 }
+
 func toHTTPResponse(conn Conn, resp *client.Response) (*http.Response, error) {
 	rheaders := fromHeaders(resp.Headers)
 	r := http.Response{

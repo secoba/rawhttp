@@ -4,9 +4,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/projectdiscovery/rawhttp/clientpipeline"
 	retryablehttp "github.com/projectdiscovery/retryablehttp-go"
 	urlutil "github.com/projectdiscovery/utils/url"
+	"github.com/secoba/rawhttp/clientpipeline"
 )
 
 // PipelineClient is a client for making pipelined http requests
@@ -31,24 +31,24 @@ func NewPipelineClient(options PipelineOptions) *PipelineClient {
 }
 
 // Head makes a HEAD request to a given URL
-func (c *PipelineClient) Head(url string) (*http.Response, error) {
+func (c *PipelineClient) Head(url string) (*clientpipeline.Request, *http.Response, error) {
 	return c.DoRaw("HEAD", url, "", nil, nil)
 }
 
 // Get makes a GET request to a given URL
-func (c *PipelineClient) Get(url string) (*http.Response, error) {
+func (c *PipelineClient) Get(url string) (*clientpipeline.Request, *http.Response, error) {
 	return c.DoRaw("GET", url, "", nil, nil)
 }
 
 // Post makes a POST request to a given URL
-func (c *PipelineClient) Post(url string, mimetype string, body io.Reader) (*http.Response, error) {
+func (c *PipelineClient) Post(url string, mimetype string, body io.Reader) (*clientpipeline.Request, *http.Response, error) {
 	headers := make(map[string][]string)
 	headers["Content-Type"] = []string{mimetype}
 	return c.DoRaw("POST", url, "", headers, body)
 }
 
 // Do sends a http request and returns a response
-func (c *PipelineClient) Do(req *http.Request) (*http.Response, error) {
+func (c *PipelineClient) Do(req *http.Request) (*clientpipeline.Request, *http.Response, error) {
 	method := req.Method
 	headers := req.Header
 	url := req.URL.String()
@@ -57,7 +57,7 @@ func (c *PipelineClient) Do(req *http.Request) (*http.Response, error) {
 }
 
 // Dor sends a retryablehttp request and returns a response
-func (c *PipelineClient) Dor(req *retryablehttp.Request) (*http.Response, error) {
+func (c *PipelineClient) Dor(req *retryablehttp.Request) (*clientpipeline.Request, *http.Response, error) {
 	method := req.Method
 	headers := req.Header
 	url := req.URL.String()
@@ -67,22 +67,22 @@ func (c *PipelineClient) Dor(req *retryablehttp.Request) (*http.Response, error)
 }
 
 // DoRaw does a raw request with some configuration
-func (c *PipelineClient) DoRaw(method, url, uripath string, headers map[string][]string, body io.Reader) (*http.Response, error) {
+func (c *PipelineClient) DoRaw(method, url, uripath string, headers map[string][]string, body io.Reader) (*clientpipeline.Request, *http.Response, error) {
 	return c.do(method, url, uripath, headers, body, c.options)
 }
 
 // DoRawWithOptions performs a raw request with additional options
-func (c *PipelineClient) DoRawWithOptions(method, url, uripath string, headers map[string][]string, body io.Reader, options PipelineOptions) (*http.Response, error) {
+func (c *PipelineClient) DoRawWithOptions(method, url, uripath string, headers map[string][]string, body io.Reader, options PipelineOptions) (*clientpipeline.Request, *http.Response, error) {
 	return c.do(method, url, uripath, headers, body, options)
 }
 
-func (c *PipelineClient) do(method, url, uripath string, headers map[string][]string, body io.Reader, options PipelineOptions) (*http.Response, error) {
+func (c *PipelineClient) do(method, url, uripath string, headers map[string][]string, body io.Reader, options PipelineOptions) (*clientpipeline.Request, *http.Response, error) {
 	if headers == nil {
 		headers = make(map[string][]string)
 	}
 	u, err := urlutil.ParseURL(url, true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// standard path
 	path := u.Path
@@ -115,5 +115,5 @@ func (c *PipelineClient) do(method, url, uripath string, headers map[string][]st
 
 	r.Body = io.NopCloser(resp.Body)
 
-	return &r, err
+	return req, &r, err
 }

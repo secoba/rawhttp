@@ -3,7 +3,7 @@ package rawhttp
 import (
 	"time"
 
-	"github.com/projectdiscovery/rawhttp/clientpipeline"
+	"github.com/secoba/rawhttp/clientpipeline"
 )
 
 // PipelineOptions contains options for pipelined http client

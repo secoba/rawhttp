@@ -2,6 +2,7 @@ package rawhttp
 
 import (
 	"fmt"
+	"github.com/secoba/rawhttp/client"
 	"io"
 	"net/http"
 	"strings"
@@ -48,24 +49,24 @@ func NewClient(options *Options) *Client {
 }
 
 // Head makes a HEAD request to a given URL
-func (c *Client) Head(url string) (*http.Response, error) {
+func (c *Client) Head(url string) (*client.Request, *http.Response, error) {
 	return c.DoRaw("HEAD", url, "", nil, nil)
 }
 
 // Get makes a GET request to a given URL
-func (c *Client) Get(url string) (*http.Response, error) {
+func (c *Client) Get(url string) (*client.Request, *http.Response, error) {
 	return c.DoRaw("GET", url, "", nil, nil)
 }
 
 // Post makes a POST request to a given URL
-func (c *Client) Post(url string, mimetype string, body io.Reader) (*http.Response, error) {
+func (c *Client) Post(url string, mimetype string, body io.Reader) (*client.Request, *http.Response, error) {
 	headers := make(map[string][]string)
 	headers["Content-Type"] = []string{mimetype}
 	return c.DoRaw("POST", url, "", headers, body)
 }
 
 // Do sends a http request and returns a response
-func (c *Client) Do(req *http.Request) (*http.Response, error) {
+func (c *Client) Do(req *http.Request) (*client.Request, *http.Response, error) {
 	method := req.Method
 	headers := req.Header
 	url := req.URL.String()
@@ -75,7 +76,7 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 }
 
 // Dor sends a retryablehttp request and returns the response
-func (c *Client) Dor(req *retryablehttp.Request) (*http.Response, error) {
+func (c *Client) Dor(req *retryablehttp.Request) (*client.Request, *http.Response, error) {
 	method := req.Method
 	headers := req.Header
 	url := req.URL.String()
@@ -85,7 +86,7 @@ func (c *Client) Dor(req *retryablehttp.Request) (*http.Response, error) {
 }
 
 // DoRaw does a raw request with some configuration
-func (c *Client) DoRaw(method, url, uripath string, headers map[string][]string, body io.Reader) (*http.Response, error) {
+func (c *Client) DoRaw(method, url, uripath string, headers map[string][]string, body io.Reader) (*client.Request, *http.Response, error) {
 	redirectstatus := &RedirectStatus{
 		FollowRedirects: true,
 		MaxRedirects:    c.Options.MaxRedirects,
@@ -94,7 +95,7 @@ func (c *Client) DoRaw(method, url, uripath string, headers map[string][]string,
 }
 
 // DoRawWithOptions performs a raw request with additional options
-func (c *Client) DoRawWithOptions(method, url, uripath string, headers map[string][]string, body io.Reader, options *Options) (*http.Response, error) {
+func (c *Client) DoRawWithOptions(method, url, uripath string, headers map[string][]string, body io.Reader, options *Options) (*client.Request, *http.Response, error) {
 	redirectstatus := &RedirectStatus{
 		FollowRedirects: options.FollowRedirects,
 		MaxRedirects:    c.Options.MaxRedirects,
@@ -123,7 +124,7 @@ func (c *Client) getConn(protocol, host string, options *Options) (Conn, error) 
 	return conn, err
 }
 
-func (c *Client) do(method, url, uripath string, headers map[string][]string, body io.Reader, redirectstatus *RedirectStatus, options *Options) (*http.Response, error) {
+func (c *Client) do(method, url, uripath string, headers map[string][]string, body io.Reader, redirectstatus *RedirectStatus, options *Options) (*client.Request, *http.Response, error) {
 	protocol := "http"
 	if strings.HasPrefix(strings.ToLower(url), "https://") {
 		protocol = "https"
@@ -134,7 +135,7 @@ func (c *Client) do(method, url, uripath string, headers map[string][]string, bo
 	}
 	u, err := urlutil.ParseURL(url, true)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	host := u.Host
@@ -170,7 +171,7 @@ func (c *Client) do(method, url, uripath string, headers map[string][]string, bo
 
 	conn, err := c.getConn(protocol, host, options)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	req := toRequest(method, path, nil, headers, body, options)
@@ -183,23 +184,23 @@ func (c *Client) do(method, url, uripath string, headers map[string][]string, bo
 	}
 
 	if err := conn.WriteRequest(req); err != nil {
-		return nil, err
+		return req, nil, err
 	}
 	resp, err := conn.ReadResponse(options.ForceReadAllBody)
 	if err != nil {
-		return nil, err
+		return req, nil, err
 	}
 
 	r, err := toHTTPResponse(conn, resp)
 	if err != nil {
-		return nil, err
+		return req, nil, err
 	}
 
 	if resp.Status.IsRedirect() && redirectstatus.FollowRedirects && redirectstatus.Current <= redirectstatus.MaxRedirects {
 		// consume the response body
 		_, err := io.Copy(io.Discard, r.Body)
 		if err := firstErr(err, r.Body.Close()); err != nil {
-			return nil, err
+			return req, nil, err
 		}
 		loc := headerValue(r.Header, "Location")
 		if strings.HasPrefix(loc, "/") {
@@ -209,7 +210,7 @@ func (c *Client) do(method, url, uripath string, headers map[string][]string, bo
 		return c.do(method, loc, uripath, headers, body, redirectstatus, options)
 	}
 
-	return r, err
+	return req, r, err
 }
 
 // RedirectStatus is the current redirect status for the request

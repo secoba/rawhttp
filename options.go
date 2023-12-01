@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/projectdiscovery/fastdialer/fastdialer"
-	"github.com/projectdiscovery/rawhttp/client"
+	"github.com/secoba/rawhttp/client"
 )
 
 // Options contains configuration options for rawhttp client

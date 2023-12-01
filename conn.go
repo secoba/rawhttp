@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/projectdiscovery/fastdialer/fastdialer"
-	"github.com/projectdiscovery/rawhttp/client"
-	"github.com/projectdiscovery/rawhttp/proxy"
+	"github.com/secoba/rawhttp/client"
+	"github.com/secoba/rawhttp/proxy"
 )
 
 // Dialer can dial a remote HTTP server.

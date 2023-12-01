@@ -4,8 +4,8 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/projectdiscovery/rawhttp"
 	"github.com/remeh/sizedwaitgroup"
+	"github.com/secoba/rawhttp"
 )
 
 func main() {

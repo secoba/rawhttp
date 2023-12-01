@@ -1,4 +1,4 @@
-module github.com/projectdiscovery/rawhttp
+module github.com/secoba/rawhttp
 
 go 1.21
 
