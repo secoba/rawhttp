@@ -182,9 +182,12 @@ func (c *Client) do(ctx context.Context, method, url, uripath string, headers ma
 
 	// set timeout if any
 	if options.Timeout > 0 {
-		_ = getConn.SetDeadline(time.Now().Add(options.Timeout))
-		//_ = getConn.SetReadDeadline(time.Now().Add(options.Timeout))
-		//_ = getConn.SetWriteDeadline(time.Now().Add(options.Timeout))
+		e1 := getConn.SetDeadline(time.Now().Add(options.Timeout))
+		e2 := getConn.SetReadDeadline(time.Now().Add(options.Timeout))
+		e3 := getConn.SetWriteDeadline(time.Now().Add(options.Timeout))
+		if e1 != nil || e2 != nil || e3 != nil {
+			fmt.Println("[!] set timeout err")
+		}
 	}
 
 	if err := getConn.WriteRequest(req); err != nil {

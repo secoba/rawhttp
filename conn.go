@@ -186,15 +186,15 @@ type conn struct {
 	*dialer
 }
 
-func (c *conn) SetDeadline(t time.Time) error {
-	if e := c.SetWriteDeadline(t); e != nil {
-		return e
-	}
-	if e := c.SetReadDeadline(t); e != nil {
-		return e
-	}
-	return nil
-}
+//func (c *conn) SetDeadline(t time.Time) error {
+//	if e := c.SetWriteDeadline(t); e != nil {
+//		return e
+//	}
+//	if e := c.SetReadDeadline(t); e != nil {
+//		return e
+//	}
+//	return nil
+//}
 
 func (c *conn) Release() {
 	c.dialer.Lock()
