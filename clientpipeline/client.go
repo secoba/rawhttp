@@ -155,6 +155,7 @@ func addMissingPort(addr string, isTLS bool) string {
 }
 
 type PipelineClient struct {
+	Ctx                 context.Context
 	Addr                string
 	MaxConns            int
 	MaxPendingRequests  int
@@ -167,11 +168,10 @@ type PipelineClient struct {
 	ReadBufferSize      int
 	WriteBufferSize     int
 	ReadTimeout         time.Duration
-	WriteTimeout        time.Duration
 
+	WriteTimeout    time.Duration
 	connClients     []*pipelineConnClient
 	connClientsLock sync.Mutex
-	ctx             context.Context
 }
 
 type pipelineConnClient struct {
@@ -208,7 +208,7 @@ type pipelineWork struct {
 }
 
 func (c *PipelineClient) Do(req *Request, resp *Response) error {
-	return c.getConnClient().Do(c.ctx, req, resp)
+	return c.getConnClient().Do(c.Ctx, req, resp)
 }
 
 func (c *pipelineConnClient) Do(ctx context.Context, req *Request, resp *Response) error {
@@ -262,13 +262,13 @@ func (c *PipelineClient) getConnClientUnlocked() *pipelineConnClient {
 
 	// Return the client with the minimum number of pending requests.
 	minCC := c.connClients[0]
-	minReqs := minCC.PendingRequests(c.ctx)
+	minReqs := minCC.PendingRequests(c.Ctx)
 	if minReqs == 0 {
 		return minCC
 	}
 	for i := 1; i < len(c.connClients); i++ {
 		cc := c.connClients[i]
-		reqs := cc.PendingRequests(c.ctx)
+		reqs := cc.PendingRequests(c.Ctx)
 		if reqs == 0 {
 			return cc
 		}
@@ -560,7 +560,7 @@ func (c *PipelineClient) PendingRequests() int {
 	c.connClientsLock.Lock()
 	n := 0
 	for _, cc := range c.connClients {
-		n += cc.PendingRequests(c.ctx)
+		n += cc.PendingRequests(c.Ctx)
 	}
 	c.connClientsLock.Unlock()
 	return n

@@ -1,6 +1,7 @@
 package rawhttp
 
 import (
+	"context"
 	"io"
 	"net/http"
 
@@ -16,9 +17,10 @@ type PipelineClient struct {
 }
 
 // NewPipelineClient creates a new pipelined http request client
-func NewPipelineClient(options PipelineOptions) *PipelineClient {
+func NewPipelineClient(ctx context.Context, options PipelineOptions) *PipelineClient {
 	client := &PipelineClient{
 		client: &clientpipeline.PipelineClient{
+			Ctx:                ctx,
 			Dial:               options.Dialer,
 			Addr:               options.Host,
 			MaxConns:           options.MaxConnections,

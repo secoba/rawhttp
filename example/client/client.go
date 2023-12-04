@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 
@@ -13,7 +14,7 @@ func main() {
 	pipeOptions := rawhttp.DefaultPipelineOptions
 	pipeOptions.Host = "scanme.sh"
 	pipeOptions.MaxConnections = 1
-	pipeclient := rawhttp.NewPipelineClient(pipeOptions)
+	pipeclient := rawhttp.NewPipelineClient(context.Background(), pipeOptions)
 	for i := 0; i < 50; i++ {
 		swg.Add()
 		go func(swg *sizedwaitgroup.SizedWaitGroup) {
@@ -25,7 +26,7 @@ func main() {
 			}
 			req.Host = "scanme.sh"
 			req.Header.Set("Host", "scanme.sh")
-			resp, err := pipeclient.Do(req)
+			_, resp, err := pipeclient.Do(req)
 			if err != nil {
 				log.Printf("Error sending request to API endpoint. %+v", err)
 				return
