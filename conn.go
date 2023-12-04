@@ -127,13 +127,13 @@ func clientDial(pCtx context.Context, protocol, addr string, timeout time.Durati
 		options.FastDialer, err = fastdialer.NewDialer(opts)
 		// use net.Dialer if fastdialer tls dial is not available
 		if err != nil {
-			var dialer *net.Dialer
+			var d *net.Dialer
 			if timeout > 0 {
-				dialer = &net.Dialer{Timeout: timeout}
+				d = &net.Dialer{Timeout: timeout}
 			} else {
-				dialer = &net.Dialer{Timeout: 8 * time.Second} // should be more than enough
+				d = &net.Dialer{Timeout: 8 * time.Second} // should be more than enough
 			}
-			return tls.DialWithDialer(dialer, "tcp", addr, tlsConfig)
+			return tls.DialWithDialer(d, "tcp", addr, tlsConfig)
 		}
 	}
 
@@ -184,6 +184,16 @@ type conn struct {
 	client.Client
 	net.Conn
 	*dialer
+}
+
+func (c *conn) SetDeadline(t time.Time) error {
+	if e := c.SetWriteDeadline(t); e != nil {
+		return e
+	}
+	if e := c.SetReadDeadline(t); e != nil {
+		return e
+	}
+	return nil
 }
 
 func (c *conn) Release() {
