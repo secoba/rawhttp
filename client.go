@@ -1,6 +1,7 @@
 package rawhttp
 
 import (
+	"context"
 	"fmt"
 	"github.com/secoba/rawhttp/client"
 	"io"
@@ -32,7 +33,7 @@ func AutomaticContentLength(enable bool) {
 
 // NewClient creates a new rawhttp client with provided options
 func NewClient(options *Options) *Client {
-	client := &Client{
+	c := &Client{
 		dialer:  new(dialer),
 		Options: options,
 	}
@@ -45,62 +46,62 @@ func NewClient(options *Options) *Client {
 			gologger.Error().Msgf("Could not create fast dialer: %s\n", err)
 		}
 	}
-	return client
+	return c
 }
 
 // Head makes a HEAD request to a given URL
-func (c *Client) Head(url string) (*client.Request, *http.Response, error) {
-	return c.DoRaw("HEAD", url, "", nil, nil)
+func (c *Client) Head(ctx context.Context, url string) (*client.Request, *http.Response, error) {
+	return c.DoRaw(ctx, "HEAD", url, "", nil, nil)
 }
 
 // Get makes a GET request to a given URL
-func (c *Client) Get(url string) (*client.Request, *http.Response, error) {
-	return c.DoRaw("GET", url, "", nil, nil)
+func (c *Client) Get(ctx context.Context, url string) (*client.Request, *http.Response, error) {
+	return c.DoRaw(ctx, "GET", url, "", nil, nil)
 }
 
 // Post makes a POST request to a given URL
-func (c *Client) Post(url string, mimetype string, body io.Reader) (*client.Request, *http.Response, error) {
+func (c *Client) Post(ctx context.Context, url string, mimetype string, body io.Reader) (*client.Request, *http.Response, error) {
 	headers := make(map[string][]string)
 	headers["Content-Type"] = []string{mimetype}
-	return c.DoRaw("POST", url, "", headers, body)
+	return c.DoRaw(ctx, "POST", url, "", headers, body)
 }
 
 // Do sends a http request and returns a response
-func (c *Client) Do(req *http.Request) (*client.Request, *http.Response, error) {
+func (c *Client) Do(ctx context.Context, req *http.Request) (*client.Request, *http.Response, error) {
 	method := req.Method
 	headers := req.Header
 	url := req.URL.String()
 	body := req.Body
 
-	return c.DoRaw(method, url, "", headers, body)
+	return c.DoRaw(ctx, method, url, "", headers, body)
 }
 
 // Dor sends a retryablehttp request and returns the response
-func (c *Client) Dor(req *retryablehttp.Request) (*client.Request, *http.Response, error) {
+func (c *Client) Dor(ctx context.Context, req *retryablehttp.Request) (*client.Request, *http.Response, error) {
 	method := req.Method
 	headers := req.Header
 	url := req.URL.String()
 	body := req.Body
 
-	return c.DoRaw(method, url, "", headers, body)
+	return c.DoRaw(ctx, method, url, "", headers, body)
 }
 
 // DoRaw does a raw request with some configuration
-func (c *Client) DoRaw(method, url, uripath string, headers map[string][]string, body io.Reader) (*client.Request, *http.Response, error) {
+func (c *Client) DoRaw(ctx context.Context, method, url, uripath string, headers map[string][]string, body io.Reader) (*client.Request, *http.Response, error) {
 	redirectstatus := &RedirectStatus{
 		FollowRedirects: true,
 		MaxRedirects:    c.Options.MaxRedirects,
 	}
-	return c.do(method, url, uripath, headers, body, redirectstatus, c.Options)
+	return c.do(ctx, method, url, uripath, headers, body, redirectstatus, c.Options)
 }
 
 // DoRawWithOptions performs a raw request with additional options
-func (c *Client) DoRawWithOptions(method, url, uripath string, headers map[string][]string, body io.Reader, options *Options) (*client.Request, *http.Response, error) {
+func (c *Client) DoRawWithOptions(ctx context.Context, method, url, uripath string, headers map[string][]string, body io.Reader, options *Options) (*client.Request, *http.Response, error) {
 	redirectstatus := &RedirectStatus{
 		FollowRedirects: options.FollowRedirects,
 		MaxRedirects:    c.Options.MaxRedirects,
 	}
-	return c.do(method, url, uripath, headers, body, redirectstatus, options)
+	return c.do(ctx, method, url, uripath, headers, body, redirectstatus, options)
 }
 
 // Close closes client and any resources it holds
@@ -110,21 +111,22 @@ func (c *Client) Close() {
 	}
 }
 
-func (c *Client) getConn(protocol, host string, options *Options) (Conn, error) {
+func (c *Client) getConn(ctx context.Context, protocol, host string, options *Options) (Conn, error) {
 	if options.Proxy != "" {
-		return c.dialer.DialWithProxy(protocol, host, c.Options.Proxy, c.Options.ProxyDialTimeout, options)
+		return c.dialer.DialWithProxy(ctx, protocol, host, c.Options.Proxy, c.Options.ProxyDialTimeout, options)
 	}
-	var conn Conn
+	var conn2 Conn
 	var err error
 	if options.Timeout > 0 {
-		conn, err = c.dialer.DialTimeout(protocol, host, options.Timeout, options)
+		conn2, err = c.dialer.DialTimeout(ctx, protocol, host, options.Timeout, options)
 	} else {
-		conn, err = c.dialer.Dial(protocol, host, options)
+		conn2, err = c.dialer.Dial(ctx, protocol, host, options)
 	}
-	return conn, err
+	return conn2, err
 }
 
-func (c *Client) do(method, url, uripath string, headers map[string][]string, body io.Reader, redirectstatus *RedirectStatus, options *Options) (*client.Request, *http.Response, error) {
+func (c *Client) do(ctx context.Context, method, url, uripath string, headers map[string][]string,
+	body io.Reader, redirectstatus *RedirectStatus, options *Options) (*client.Request, *http.Response, error) {
 	protocol := "http"
 	if strings.HasPrefix(strings.ToLower(url), "https://") {
 		protocol = "https"
@@ -169,7 +171,7 @@ func (c *Client) do(method, url, uripath string, headers map[string][]string, bo
 		protocol = "https"
 	}
 
-	conn, err := c.getConn(protocol, host, options)
+	getConn, err := c.getConn(ctx, protocol, host, options)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -180,18 +182,18 @@ func (c *Client) do(method, url, uripath string, headers map[string][]string, bo
 
 	// set timeout if any
 	if options.Timeout > 0 {
-		_ = conn.SetDeadline(time.Now().Add(options.Timeout))
+		_ = getConn.SetDeadline(time.Now().Add(options.Timeout))
 	}
 
-	if err := conn.WriteRequest(req); err != nil {
+	if err := getConn.WriteRequest(req); err != nil {
 		return req, nil, err
 	}
-	resp, err := conn.ReadResponse(options.ForceReadAllBody)
+	resp, err := getConn.ReadResponse(options.ForceReadAllBody)
 	if err != nil {
 		return req, nil, err
 	}
 
-	r, err := toHTTPResponse(conn, resp)
+	r, err := toHTTPResponse(getConn, resp)
 	if err != nil {
 		return req, nil, err
 	}
@@ -207,7 +209,7 @@ func (c *Client) do(method, url, uripath string, headers map[string][]string, bo
 			loc = fmt.Sprintf("%s://%s%s", protocol, host, loc)
 		}
 		redirectstatus.Current++
-		return c.do(method, loc, uripath, headers, body, redirectstatus, options)
+		return c.do(ctx, method, loc, uripath, headers, body, redirectstatus, options)
 	}
 
 	return req, r, err

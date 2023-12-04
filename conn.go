@@ -19,10 +19,10 @@ import (
 // Dialer can dial a remote HTTP server.
 type Dialer interface {
 	// Dial dials a remote http server returning a Conn.
-	Dial(protocol, addr string, options *Options) (Conn, error)
-	DialWithProxy(protocol, addr, proxyURL string, timeout time.Duration, options *Options) (Conn, error)
+	Dial(ctx context.Context, protocol, addr string, options *Options) (Conn, error)
+	DialWithProxy(ctx context.Context, protocol, addr, proxyURL string, timeout time.Duration, options *Options) (Conn, error)
 	// Dial dials a remote http server with timeout returning a Conn.
-	DialTimeout(protocol, addr string, timeout time.Duration, options *Options) (Conn, error)
+	DialTimeout(ctx context.Context, protocol, addr string, timeout time.Duration, options *Options) (Conn, error)
 }
 
 type dialer struct {
@@ -30,29 +30,29 @@ type dialer struct {
 	conns      map[string][]Conn // maps addr to a, possibly empty, slice of existing Conns
 }
 
-func (d *dialer) Dial(protocol, addr string, options *Options) (Conn, error) {
-	return d.dialTimeout(protocol, addr, 0, options)
+func (d *dialer) Dial(ctx context.Context, protocol, addr string, options *Options) (Conn, error) {
+	return d.dialTimeout(ctx, protocol, addr, 0, options)
 }
 
-func (d *dialer) DialTimeout(protocol, addr string, timeout time.Duration, options *Options) (Conn, error) {
-	return d.dialTimeout(protocol, addr, timeout, options)
+func (d *dialer) DialTimeout(ctx context.Context, protocol, addr string, timeout time.Duration, options *Options) (Conn, error) {
+	return d.dialTimeout(ctx, protocol, addr, timeout, options)
 }
 
-func (d *dialer) dialTimeout(protocol, addr string, timeout time.Duration, options *Options) (Conn, error) {
+func (d *dialer) dialTimeout(ctx context.Context, protocol, addr string, timeout time.Duration, options *Options) (Conn, error) {
 	d.Lock()
 	if d.conns == nil {
 		d.conns = make(map[string][]Conn)
 	}
 	if c, ok := d.conns[addr]; ok {
 		if len(c) > 0 {
-			conn := c[0]
+			conn2 := c[0]
 			c[0] = c[len(c)-1]
 			d.Unlock()
-			return conn, nil
+			return conn2, nil
 		}
 	}
 	d.Unlock()
-	c, err := clientDial(protocol, addr, timeout, options)
+	c, err := clientDial(ctx, protocol, addr, timeout, options)
 	return &conn{
 		Client: client.NewClient(c),
 		Conn:   c,
@@ -60,7 +60,7 @@ func (d *dialer) dialTimeout(protocol, addr string, timeout time.Duration, optio
 	}, err
 }
 
-func (d *dialer) DialWithProxy(protocol, addr, proxyURL string, timeout time.Duration, options *Options) (Conn, error) {
+func (d *dialer) DialWithProxy(ctx context.Context, protocol, addr, proxyURL string, timeout time.Duration, options *Options) (Conn, error) {
 	var c net.Conn
 	u, err := url.Parse(proxyURL)
 	if err != nil {
@@ -78,7 +78,7 @@ func (d *dialer) DialWithProxy(protocol, addr, proxyURL string, timeout time.Dur
 		return nil, fmt.Errorf("proxy error: %w", err)
 	}
 	if protocol == "https" {
-		if c, err = TlsHandshake(c, addr, timeout); err != nil {
+		if c, err = TlsHandshake(ctx, c, addr, timeout); err != nil {
 			return nil, fmt.Errorf("tls handshake error: %w", err)
 		}
 	}
@@ -89,16 +89,16 @@ func (d *dialer) DialWithProxy(protocol, addr, proxyURL string, timeout time.Dur
 	}, err
 }
 
-func clientDial(protocol, addr string, timeout time.Duration, options *Options) (net.Conn, error) {
+func clientDial(pCtx context.Context, protocol, addr string, timeout time.Duration, options *Options) (net.Conn, error) {
 	var (
 		ctx    context.Context
 		cancel context.CancelFunc
 	)
 	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		ctx, cancel = context.WithTimeout(pCtx, timeout)
 		defer cancel()
 	} else {
-		ctx = context.Background()
+		ctx = pCtx
 	}
 
 	// http
@@ -141,7 +141,7 @@ func clientDial(protocol, addr string, timeout time.Duration, options *Options) 
 }
 
 // TlsHandshake tls handshake on a plain connection
-func TlsHandshake(conn net.Conn, addr string, timeout time.Duration) (net.Conn, error) {
+func TlsHandshake(pCtx context.Context, conn net.Conn, addr string, timeout time.Duration) (net.Conn, error) {
 	colonPos := strings.LastIndex(addr, ":")
 	if colonPos == -1 {
 		colonPos = len(addr)
@@ -153,10 +153,10 @@ func TlsHandshake(conn net.Conn, addr string, timeout time.Duration) (net.Conn, 
 		cancel context.CancelFunc
 	)
 	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), timeout)
+		ctx, cancel = context.WithTimeout(pCtx, timeout)
 		defer cancel()
 	} else {
-		ctx = context.Background()
+		ctx = pCtx
 	}
 
 	tlsConn := tls.Client(conn, &tls.Config{

@@ -12,20 +12,20 @@ import (
 	"time"
 )
 
-func Dial(addr string) (net.Conn, error) {
-	return defaultDialer.Dial(addr)
+func Dial(ctx context.Context, addr string) (net.Conn, error) {
+	return defaultDialer.Dial(ctx, addr)
 }
 
-func DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
-	return defaultDialer.DialTimeout(addr, timeout)
+func DialTimeout(ctx context.Context, addr string, timeout time.Duration) (net.Conn, error) {
+	return defaultDialer.DialTimeout(ctx, addr, timeout)
 }
 
-func DialDualStack(addr string) (net.Conn, error) {
-	return defaultDialer.DialDualStack(addr)
+func DialDualStack(ctx context.Context, addr string) (net.Conn, error) {
+	return defaultDialer.DialDualStack(ctx, addr)
 }
 
-func DialDualStackTimeout(addr string, timeout time.Duration) (net.Conn, error) {
-	return defaultDialer.DialDualStackTimeout(addr, timeout)
+func DialDualStackTimeout(ctx context.Context, addr string, timeout time.Duration) (net.Conn, error) {
+	return defaultDialer.DialDualStackTimeout(ctx, addr, timeout)
 }
 
 var (
@@ -48,23 +48,23 @@ type TCPDialer struct {
 	once          sync.Once
 }
 
-func (d *TCPDialer) Dial(addr string) (net.Conn, error) {
-	return d.dial(addr, false, DefaultDialTimeout)
+func (d *TCPDialer) Dial(ctx context.Context, addr string) (net.Conn, error) {
+	return d.dial(ctx, addr, false, DefaultDialTimeout)
 }
 
-func (d *TCPDialer) DialTimeout(addr string, timeout time.Duration) (net.Conn, error) {
-	return d.dial(addr, false, timeout)
+func (d *TCPDialer) DialTimeout(ctx context.Context, addr string, timeout time.Duration) (net.Conn, error) {
+	return d.dial(ctx, addr, false, timeout)
 }
 
-func (d *TCPDialer) DialDualStack(addr string) (net.Conn, error) {
-	return d.dial(addr, true, DefaultDialTimeout)
+func (d *TCPDialer) DialDualStack(ctx context.Context, addr string) (net.Conn, error) {
+	return d.dial(ctx, addr, true, DefaultDialTimeout)
 }
 
-func (d *TCPDialer) DialDualStackTimeout(addr string, timeout time.Duration) (net.Conn, error) {
-	return d.dial(addr, true, timeout)
+func (d *TCPDialer) DialDualStackTimeout(ctx context.Context, addr string, timeout time.Duration) (net.Conn, error) {
+	return d.dial(ctx, addr, true, timeout)
 }
 
-func (d *TCPDialer) dial(addr string, dualStack bool, timeout time.Duration) (net.Conn, error) {
+func (d *TCPDialer) dial(ctx context.Context, addr string, dualStack bool, timeout time.Duration) (net.Conn, error) {
 	d.once.Do(func() {
 		if d.Concurrency > 0 {
 			d.concurrencyCh = make(chan struct{}, d.Concurrency)
@@ -73,7 +73,7 @@ func (d *TCPDialer) dial(addr string, dualStack bool, timeout time.Duration) (ne
 		go d.tcpAddrsClean()
 	})
 
-	addrs, idx, err := d.getTCPAddrs(addr, dualStack)
+	addrs, idx, err := d.getTCPAddrs(ctx, addr, dualStack)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func (d *TCPDialer) tcpAddrsClean() {
 	}
 }
 
-func (d *TCPDialer) getTCPAddrs(addr string, dualStack bool) ([]net.TCPAddr, uint32, error) {
+func (d *TCPDialer) getTCPAddrs(ctx context.Context, addr string, dualStack bool) ([]net.TCPAddr, uint32, error) {
 	d.tcpAddrsLock.Lock()
 	e := d.tcpAddrsMap[addr]
 	if e != nil && !e.pending && time.Since(e.resolveTime) > DefaultDNSCacheDuration {
@@ -208,7 +208,7 @@ func (d *TCPDialer) getTCPAddrs(addr string, dualStack bool) ([]net.TCPAddr, uin
 	d.tcpAddrsLock.Unlock()
 
 	if e == nil {
-		addrs, err := resolveTCPAddrs(addr, dualStack, d.Resolver)
+		addrs, err := resolveTCPAddrs(ctx, addr, dualStack, d.Resolver)
 		if err != nil {
 			d.tcpAddrsLock.Lock()
 			e = d.tcpAddrsMap[addr]
@@ -233,7 +233,7 @@ func (d *TCPDialer) getTCPAddrs(addr string, dualStack bool) ([]net.TCPAddr, uin
 	return e.addrs, idx, nil
 }
 
-func resolveTCPAddrs(addr string, dualStack bool, resolver Resolver) ([]net.TCPAddr, error) {
+func resolveTCPAddrs(pCtx context.Context, addr string, dualStack bool, resolver Resolver) ([]net.TCPAddr, error) {
 	host, portS, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
@@ -247,7 +247,7 @@ func resolveTCPAddrs(addr string, dualStack bool, resolver Resolver) ([]net.TCPA
 		resolver = net.DefaultResolver
 	}
 
-	ctx := context.Background()
+	ctx, _ := context.WithCancel(pCtx)
 	ipaddrs, err := resolver.LookupIPAddr(ctx, host)
 	if err != nil {
 		return nil, err

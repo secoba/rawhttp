@@ -4,6 +4,7 @@ package clientpipeline
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"errors"
 	"net"
@@ -19,13 +20,12 @@ const DefaultMaxIdemponentCallAttempts = 5
 const defaultReadBufferSize = 4096
 const defaultWriteBufferSize = 4096
 
-type DialFunc func(addr string) (net.Conn, error)
+type DialFunc func(ctx context.Context, addr string) (net.Conn, error)
 type RetryIfFunc func(request *Request) bool
 
 var (
 	ErrNoFreeConns      = errors.New("no free connections available to host")
-	ErrConnectionClosed = errors.New("the server closed connection before returning the first response byte. " +
-		"Make sure the server returns 'Connection: close' response header before closing the connection")
+	ErrConnectionClosed = errors.New("the server closed connection before returning the first response byte. Make sure the server returns 'Connection: close' response header before closing the connection")
 	// ErrGetOnly is returned when server expects only GET requests,
 	// but some other type of request came (Server.GetOnly option is true).
 	ErrGetOnly = errors.New("non-GET request received")
@@ -116,7 +116,7 @@ func tlsClientHandshake(rawConn net.Conn, tlsConfig *tls.Config, timeout time.Du
 	}
 }
 
-func dialAddr(addr string, dial DialFunc, dialDualStack, isTLS bool, tlsConfig *tls.Config, timeout time.Duration) (net.Conn, error) {
+func dialAddr(ctx context.Context, addr string, dial DialFunc, dialDualStack, isTLS bool, tlsConfig *tls.Config, timeout time.Duration) (net.Conn, error) {
 	if dial == nil {
 		if dialDualStack {
 			dial = DialDualStack
@@ -125,7 +125,7 @@ func dialAddr(addr string, dial DialFunc, dialDualStack, isTLS bool, tlsConfig *
 		}
 		addr = addMissingPort(addr, isTLS)
 	}
-	conn, err := dial(addr)
+	conn, err := dial(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -171,6 +171,7 @@ type PipelineClient struct {
 
 	connClients     []*pipelineConnClient
 	connClientsLock sync.Mutex
+	ctx             context.Context
 }
 
 type pipelineConnClient struct {
@@ -207,11 +208,11 @@ type pipelineWork struct {
 }
 
 func (c *PipelineClient) Do(req *Request, resp *Response) error {
-	return c.getConnClient().Do(req, resp)
+	return c.getConnClient().Do(c.ctx, req, resp)
 }
 
-func (c *pipelineConnClient) Do(req *Request, resp *Response) error {
-	c.init()
+func (c *pipelineConnClient) Do(ctx context.Context, req *Request, resp *Response) error {
+	c.init(ctx)
 
 	w := acquirePipelineWork(&c.workPool, 0)
 	w.req = req
@@ -261,13 +262,13 @@ func (c *PipelineClient) getConnClientUnlocked() *pipelineConnClient {
 
 	// Return the client with the minimum number of pending requests.
 	minCC := c.connClients[0]
-	minReqs := minCC.PendingRequests()
+	minReqs := minCC.PendingRequests(c.ctx)
 	if minReqs == 0 {
 		return minCC
 	}
 	for i := 1; i < len(c.connClients); i++ {
 		cc := c.connClients[i]
-		reqs := cc.PendingRequests()
+		reqs := cc.PendingRequests(c.ctx)
 		if reqs == 0 {
 			return cc
 		}
@@ -310,7 +311,7 @@ var ErrPipelineOverflow = errors.New("pipelined requests' queue has been overflo
 
 const DefaultMaxPendingRequests = 1024
 
-func (c *pipelineConnClient) init() {
+func (c *pipelineConnClient) init(ctx context.Context) {
 	c.chLock.Lock()
 	if c.chR == nil {
 		maxPendingRequests := c.MaxPendingRequests
@@ -324,7 +325,7 @@ func (c *pipelineConnClient) init() {
 		go func() {
 			// Keep restarting the worker if it fails (connection errors for example).
 			for {
-				if err := c.worker(); err != nil {
+				if err := c.worker(ctx); err != nil {
 					w := <-c.chW
 					w.err = err
 					w.done <- struct{}{}
@@ -347,9 +348,9 @@ func (c *pipelineConnClient) init() {
 	c.chLock.Unlock()
 }
 
-func (c *pipelineConnClient) worker() error {
+func (c *pipelineConnClient) worker(ctx context.Context) error {
 	tlsConfig := c.cachedTLSConfig()
-	conn, err := dialAddr(c.Addr, c.Dial, c.DialDualStack, c.IsTLS, tlsConfig, c.WriteTimeout)
+	conn, err := dialAddr(ctx, c.Addr, c.Dial, c.DialDualStack, c.IsTLS, tlsConfig, c.WriteTimeout)
 	if err != nil {
 		return err
 	}
@@ -559,14 +560,14 @@ func (c *PipelineClient) PendingRequests() int {
 	c.connClientsLock.Lock()
 	n := 0
 	for _, cc := range c.connClients {
-		n += cc.PendingRequests()
+		n += cc.PendingRequests(c.ctx)
 	}
 	c.connClientsLock.Unlock()
 	return n
 }
 
-func (c *pipelineConnClient) PendingRequests() int {
-	c.init()
+func (c *pipelineConnClient) PendingRequests(ctx context.Context) int {
+	c.init(ctx)
 
 	c.chLock.Lock()
 	n := len(c.chR) + len(c.chW)

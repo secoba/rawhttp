@@ -1,6 +1,7 @@
 package rawhttp
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,10 +26,10 @@ func TestDialDefaultTimeout(t *testing.T) {
 	timeout := 30 * time.Second
 	ts := getTestHttpServer(45 * time.Second)
 	defer ts.Close()
-
+	ctx := context.Background()
 	startTime := time.Now()
 	client := NewClient(DefaultOptions)
-	_, _, err := client.DoRaw("GET", ts.URL, "/rawhttp", nil, nil)
+	_, _, err := client.DoRaw(ctx, "GET", ts.URL, "/rawhttp", nil, nil)
 	if !stringsutil.ContainsAny(err.Error(), "i/o timeout") || time.Now().Before(startTime.Add(timeout)) {
 		t.Error("default timeout error")
 	}
@@ -38,12 +39,12 @@ func TestDialWithCustomTimeout(t *testing.T) {
 	timeout := 5 * time.Second
 	ts := getTestHttpServer(10 * time.Second)
 	defer ts.Close()
-
+	ctx := context.Background()
 	startTime := time.Now()
 	client := NewClient(DefaultOptions)
 	options := DefaultOptions
 	options.Timeout = timeout
-	_, _, err := client.DoRawWithOptions("GET", ts.URL, "/rawhttp", nil, nil, options)
+	_, _, err := client.DoRawWithOptions(ctx, "GET", ts.URL, "/rawhttp", nil, nil, options)
 	if !stringsutil.ContainsAny(err.Error(), "i/o timeout") || time.Now().Before(startTime.Add(timeout)) {
 		t.Error("custom timeout error")
 	}
