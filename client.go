@@ -129,25 +129,18 @@ func (c *Client) getConn(protocol, host string, options *Options) (Conn, error) 
 	return conn2, err
 }
 
-func (c *Client) CreateConnection(url, uripath string, headers map[string][]string, options *Options) (Conn, error) {
+func (c *Client) CreateConnection(url string, options *Options) (Conn, error) {
 	protocol := "http"
 	if strings.HasPrefix(strings.ToLower(url), "https://") {
 		protocol = "https"
 	}
 
-	if headers == nil {
-		headers = make(map[string][]string)
-	}
 	u, err := urlutil.ParseURL(url, true)
 	if err != nil {
 		return nil, err
 	}
 
 	host := u.Host
-	if options.AutomaticHostHeader {
-		// add automatic space
-		headers["Host"] = []string{fmt.Sprintf(" %s", host)}
-	}
 
 	if !strings.Contains(host, ":") {
 		if protocol == "https" {
@@ -158,17 +151,17 @@ func (c *Client) CreateConnection(url, uripath string, headers map[string][]stri
 	}
 
 	// standard path
-	path := u.Path
-	if path == "" {
-		path = "/"
-	}
-	if !u.Params.IsEmpty() {
-		path += "?" + u.Params.Encode()
-	}
+	//path := u.Path
+	//if path == "" {
+	//	path = "/"
+	//}
+	//if !u.Params.IsEmpty() {
+	//	path += "?" + u.Params.Encode()
+	//}
 	// override if custom one is specified
-	if uripath != "" {
-		path = uripath
-	}
+	//if uripath != "" {
+	//	path = uripath
+	//}
 
 	if strings.HasPrefix(url, "https://") {
 		protocol = "https"
