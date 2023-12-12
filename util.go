@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 
 	urlutil "github.com/projectdiscovery/utils/url"
@@ -26,9 +27,51 @@ type readCloser struct {
 	io.Closer
 }
 
-func toRequest(method string, path string, query []string, headers map[string][]string, body io.Reader, options *Options) *client.Request {
+func toRequest(method string, host, path string, query []string, headers map[string][]string, body io.Reader, options *Options) *client.Request {
 	if len(options.CustomRawBytes) > 0 {
-		return &client.Request{RawBytes: options.CustomRawBytes}
+		if options.AutomaticHostHeader || options.AutomaticContentLength {
+			var (
+				hasHost   bool
+				hasLength bool
+			)
+
+			buffer := new(bytes.Buffer)
+			bufferArr := bytes.SplitN(options.CustomRawBytes, []byte("\r\n\r\n"), 2)
+			if options.AutomaticHostHeader {
+				reg := regexp.MustCompile("(?i)(host:\\s*(.*)\r\n)")
+				ret := reg.FindString(string(bufferArr[0]))
+				if len(ret) > 0 {
+					hasHost = true
+					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(host))
+				}
+			}
+			if options.AutomaticContentLength {
+				reg := regexp.MustCompile("(?i)(content-length:\\s*(\\d+)\r\n)")
+				ret := reg.FindString(string(bufferArr[0]))
+				if len(ret) > 0 {
+					hasLength = true
+					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
+				}
+			}
+
+			buffer.Write(bufferArr[0])
+			buffer.WriteString("\r\n")
+			if !hasHost {
+				buffer.WriteString(fmt.Sprintf("Host: %sf", host))
+				buffer.WriteString("\r\n")
+			}
+			if !hasLength {
+				buffer.WriteString(fmt.Sprintf("Content-Length: %d", len(bufferArr[1])))
+				buffer.WriteString("\r\n")
+			}
+			buffer.WriteString("\r\n")
+			buffer.Write(bufferArr[1])
+
+			options.CustomRawBytes = buffer.Bytes()
+
+		} else {
+			return &client.Request{RawBytes: options.CustomRawBytes}
+		}
 	}
 	reqHeaders := toHeaders(headers)
 	if len(options.CustomHeaders) > 0 {
@@ -139,7 +182,7 @@ func DumpRequestRaw(method, url, uripath string, headers map[string][]string, bo
 		path = uripath
 	}
 
-	req := toRequest(method, path, nil, headers, body, options)
+	req := toRequest(method, u.Host, path, nil, headers, body, options)
 	b := strings.Builder{}
 
 	q := strings.Join(req.Query, "&")
