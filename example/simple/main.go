@@ -19,7 +19,8 @@ func main() {
 	flag.Parse()
 
 	client := rawhttp.NewClient(rawhttp.DefaultOptions)
-	_, resp, err := client.Get(url)
+	cc, _ := client.CreateConnection("", "", nil, nil)
+	_, resp, err := client.Get(cc, url)
 	if err != nil {
 		panic(err)
 	}
