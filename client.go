@@ -237,7 +237,7 @@ func (c *Client) do(getConn Conn, method, url, uripath string, headers map[strin
 	//	getConn.SetTimeout(options.Timeout)
 	//}
 
-	req := toRequest(method, path, nil, headers, body, options)
+	req := toRequest(method, u.Host, path, nil, headers, body, options)
 	req.AutomaticContentLength = options.AutomaticContentLength
 	req.AutomaticHost = options.AutomaticHostHeader
 
