@@ -18,11 +18,9 @@ import (
 
 // Dialer can dial a remote HTTP server.
 type Dialer interface {
-	// Dial dials a remote http server returning a Conn.
-	Dial(ctx context.Context, protocol, addr string, options *Options) (Conn, error)
-	DialWithProxy(ctx context.Context, protocol, addr, proxyURL string, timeout time.Duration, options *Options) (Conn, error)
-	// Dial dials a remote http server with timeout returning a Conn.
-	DialTimeout(ctx context.Context, protocol, addr string, timeout time.Duration, options *Options) (Conn, error)
+	Dial(protocol, addr string, options *Options) (Conn, error) // Dial dials a remote http server returning a Conn.
+	DialWithProxy(protocol, addr, proxyURL string, timeout time.Duration, options *Options) (Conn, error)
+	DialTimeout(protocol, addr string, timeout time.Duration, options *Options) (Conn, error) // Dial dials a remote http server with timeout returning a Conn.
 }
 
 type dialer struct {
@@ -30,15 +28,15 @@ type dialer struct {
 	conns      map[string][]Conn // maps addr to a, possibly empty, slice of existing Conns
 }
 
-func (d *dialer) Dial(ctx context.Context, protocol, addr string, options *Options) (Conn, error) {
-	return d.dialTimeout(ctx, protocol, addr, 0, options)
+func (d *dialer) Dial(protocol, addr string, options *Options) (Conn, error) {
+	return d.dialTimeout(protocol, addr, 0, options)
 }
 
-func (d *dialer) DialTimeout(ctx context.Context, protocol, addr string, timeout time.Duration, options *Options) (Conn, error) {
-	return d.dialTimeout(ctx, protocol, addr, timeout, options)
+func (d *dialer) DialTimeout(protocol, addr string, timeout time.Duration, options *Options) (Conn, error) {
+	return d.dialTimeout(protocol, addr, timeout, options)
 }
 
-func (d *dialer) dialTimeout(ctx context.Context, protocol, addr string, timeout time.Duration, options *Options) (Conn, error) {
+func (d *dialer) dialTimeout(protocol, addr string, timeout time.Duration, options *Options) (Conn, error) {
 	d.Lock()
 	if d.conns == nil {
 		d.conns = make(map[string][]Conn)
@@ -52,7 +50,7 @@ func (d *dialer) dialTimeout(ctx context.Context, protocol, addr string, timeout
 		}
 	}
 	d.Unlock()
-	c, err := clientDial(ctx, protocol, addr, timeout, options)
+	c, err := clientDial(protocol, addr, timeout, options)
 	return &conn{
 		Client: client.NewClient(c),
 		Conn:   c,
@@ -60,7 +58,7 @@ func (d *dialer) dialTimeout(ctx context.Context, protocol, addr string, timeout
 	}, err
 }
 
-func (d *dialer) DialWithProxy(ctx context.Context, protocol, addr, proxyURL string, timeout time.Duration, options *Options) (Conn, error) {
+func (d *dialer) DialWithProxy(protocol, addr, proxyURL string, timeout time.Duration, options *Options) (Conn, error) {
 	var c net.Conn
 	u, err := url.Parse(proxyURL)
 	if err != nil {
@@ -78,10 +76,11 @@ func (d *dialer) DialWithProxy(ctx context.Context, protocol, addr, proxyURL str
 		return nil, fmt.Errorf("proxy error: %w", err)
 	}
 	if protocol == "https" {
-		if c, err = TlsHandshake(ctx, c, addr, timeout); err != nil {
+		if c, err = TlsHandshake(c, addr, timeout); err != nil {
 			return nil, fmt.Errorf("tls handshake error: %w", err)
 		}
 	}
+
 	return &conn{
 		Client: client.NewClient(c),
 		Conn:   c,
@@ -89,22 +88,18 @@ func (d *dialer) DialWithProxy(ctx context.Context, protocol, addr, proxyURL str
 	}, err
 }
 
-func clientDial(pCtx context.Context, protocol, addr string, timeout time.Duration, options *Options) (net.Conn, error) {
-	var (
-		ctx    context.Context
-		cancel context.CancelFunc
-	)
-	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(pCtx, timeout)
-		defer cancel()
-	} else {
-		ctx = pCtx
-	}
+func clientDial(protocol, addr string, timeout time.Duration, options *Options) (net.Conn, error) {
+	//if timeout > 0 {
+	//	ctx, cancel = context.WithTimeout(pCtx, timeout)
+	//	defer cancel()
+	//} else {
+	//	ctx = pCtx
+	//}
 
 	// http
 	if protocol == "http" {
 		if options.FastDialer != nil {
-			return options.FastDialer.Dial(ctx, "tcp", addr)
+			return options.FastDialer.Dial(context.Background(), "tcp", addr)
 		} else if timeout > 0 {
 			return net.DialTimeout("tcp", addr, timeout)
 		}
@@ -137,26 +132,25 @@ func clientDial(pCtx context.Context, protocol, addr string, timeout time.Durati
 		}
 	}
 
-	return options.FastDialer.DialTLS(ctx, "tcp", addr)
+	return options.FastDialer.DialTLS(context.Background(), "tcp", addr)
 }
 
 // TlsHandshake tls handshake on a plain connection
-func TlsHandshake(pCtx context.Context, conn net.Conn, addr string, timeout time.Duration) (net.Conn, error) {
+func TlsHandshake(conn net.Conn, addr string, timeout time.Duration) (net.Conn, error) {
+	var (
+		ctx    = context.Background()
+		cancel context.CancelFunc
+	)
+
 	colonPos := strings.LastIndex(addr, ":")
 	if colonPos == -1 {
 		colonPos = len(addr)
 	}
 	hostname := addr[:colonPos]
 
-	var (
-		ctx    context.Context
-		cancel context.CancelFunc
-	)
 	if timeout > 0 {
-		ctx, cancel = context.WithTimeout(pCtx, timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
-	} else {
-		ctx = pCtx
 	}
 
 	tlsConn := tls.Client(conn, &tls.Config{
@@ -174,10 +168,9 @@ type Conn interface {
 	client.Client
 	io.Closer
 
-	SetDeadline(time.Time) error
-	SetReadDeadline(time.Time) error
-	SetWriteDeadline(time.Time) error
+	SetTimeout(duration time.Duration)
 	Release()
+	//Stop() error
 }
 
 type conn struct {
@@ -186,19 +179,22 @@ type conn struct {
 	*dialer
 }
 
-//func (c *conn) SetDeadline(t time.Time) error {
-//	if e := c.SetWriteDeadline(t); e != nil {
-//		return e
-//	}
-//	if e := c.SetReadDeadline(t); e != nil {
-//		return e
-//	}
-//	return nil
-//}
-
 func (c *conn) Release() {
 	c.dialer.Lock()
 	defer c.dialer.Unlock()
 	addr := c.Conn.RemoteAddr().String()
 	c.dialer.conns[addr] = append(c.dialer.conns[addr], c)
+}
+
+//func (c *conn) Stop() error {
+//	return c.Conn.Close()
+//}
+
+func (c *conn) SetTimeout(timeout time.Duration) {
+	_ = c.SetDeadline(time.Now().Add(timeout))
+	_ = c.SetReadDeadline(time.Now().Add(timeout))
+	_ = c.SetWriteDeadline(time.Now().Add(timeout))
+	//_ = c.Conn.SetDeadline(time.Now().Add(timeout))
+	//_ = c.Conn.SetReadDeadline(time.Now().Add(timeout))
+	//_ = c.Conn.SetWriteDeadline(time.Now().Add(timeout))
 }

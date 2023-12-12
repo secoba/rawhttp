@@ -5,17 +5,18 @@ import (
 	"net/url"
 	"time"
 
-	"golang.org/x/net/proxy"
+	p "golang.org/x/net/proxy"
 )
 
 func Socks5Dialer(proxyAddr string, timeout time.Duration) DialFunc {
 	var (
 		u      *url.URL
 		err    error
-		dialer proxy.Dialer
+		dialer p.Dialer
 	)
 	if u, err = url.Parse(proxyAddr); err == nil {
-		dialer, err = proxy.FromURL(u, proxy.Direct)
+		dialer, err = p.FromURL(u, p.Direct)
+		//dialer, err = p.SOCKS5("tcp", proxyAddr, nil, &net.Dialer{Timeout: timeout * time.Second})
 	}
 	return func(addr string) (net.Conn, error) {
 		if err != nil {

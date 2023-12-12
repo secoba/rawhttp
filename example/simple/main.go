@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"flag"
 	"fmt"
 	"net/http/httputil"
@@ -20,7 +19,7 @@ func main() {
 	flag.Parse()
 
 	client := rawhttp.NewClient(rawhttp.DefaultOptions)
-	_, resp, err := client.Get(context.Background(), url)
+	_, resp, err := client.Get(url)
 	if err != nil {
 		panic(err)
 	}

@@ -36,8 +36,12 @@ func httpDialer(proxyAddr string, timeout time.Duration, fd *fastdialer.Dialer) 
 		if fd != nil {
 			netConn, err = fd.Dial(context.TODO(), "tcp", u.Host)
 		} else {
-			netConn, err = net.DialTimeout("tcp", u.Host, timeout)
+			netConn, err = net.Dial("tcp", u.Host)
 		}
+
+		//_ = netConn.SetDeadline(time.Now().Add(timeout))
+		//_ = netConn.SetReadDeadline(time.Now().Add(timeout))
+		//_ = netConn.SetWriteDeadline(time.Now().Add(timeout))
 
 		if err != nil {
 			return nil, err
