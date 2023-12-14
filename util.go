@@ -69,9 +69,9 @@ func toRequest(method string, host, path string, query []string, headers map[str
 
 			options.CustomRawBytes = buffer.Bytes()
 
-		} else {
+		} /*else {
 			return &client.Request{RawBytes: options.CustomRawBytes}
-		}
+		}*/
 	}
 	reqHeaders := toHeaders(headers)
 	if len(options.CustomHeaders) > 0 {
@@ -79,12 +79,13 @@ func toRequest(method string, host, path string, query []string, headers map[str
 	}
 
 	return &client.Request{
-		Method:  method,
-		Path:    path,
-		Query:   query,
-		Version: client.HTTP_1_1,
-		Headers: reqHeaders,
-		Body:    body,
+		Method:   method,
+		Path:     path,
+		Query:    query,
+		Version:  client.HTTP_1_1,
+		Headers:  reqHeaders,
+		Body:     body,
+		RawBytes: options.CustomRawBytes,
 	}
 }
 
