@@ -59,6 +59,8 @@ func toRequest(method string, host, path string, query []string, headers map[str
 			}
 
 			buffer := new(bytes.Buffer)
+
+			// pkg prefix
 			prePkg := bytes.Split(bufferArr[0], []byte(seperator))
 			for i := 0; i < len(prePkg); i++ {
 				buffer.Write(prePkg[i])
@@ -72,9 +74,15 @@ func toRequest(method string, host, path string, query []string, headers map[str
 				buffer.WriteString(fmt.Sprintf("Content-Length: %d", len(bufferArr[1])))
 				buffer.WriteString("\r\n")
 			}
-			buffer.WriteString("\r\n")
-			buffer.Write(bufferArr[1])
 
+			buffer.WriteString("\r\n")
+
+			// body
+			sufPkg := bytes.Split(bufferArr[1], []byte(seperator))
+			for i := 0; i < len(sufPkg); i++ {
+				buffer.Write(sufPkg[i])
+				buffer.WriteString("\r\n")
+			}
 			options.CustomRawBytes = buffer.Bytes()
 
 		} /*else {
