@@ -2,14 +2,15 @@ package rawhttp
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
 	"github.com/projectdiscovery/fastdialer/fastdialer"
 	"github.com/projectdiscovery/gologger"
 	retryablehttp "github.com/projectdiscovery/retryablehttp-go"
 	urlutil "github.com/projectdiscovery/utils/url"
 	"github.com/secoba/rawhttp/client"
-	"io"
-	"net/http"
-	"strings"
 )
 
 // Client is a client for making raw http requests with go
@@ -49,31 +50,16 @@ func NewClient(options *Options) *Client {
 
 // Head makes a HEAD request to a given URL
 func (c *Client) Head(conn Conn, url string) (*client.Request, *http.Response, error) {
-	defer func() {
-		if conn != nil {
-			conn.Stop()
-		}
-	}()
 	return c.DoRaw(conn, "HEAD", url, "", nil, nil)
 }
 
 // Get makes a GET request to a given URL
 func (c *Client) Get(conn Conn, url string) (*client.Request, *http.Response, error) {
-	defer func() {
-		if conn != nil {
-			conn.Stop()
-		}
-	}()
 	return c.DoRaw(conn, "GET", url, "", nil, nil)
 }
 
 // Post makes a POST request to a given URL
 func (c *Client) Post(conn Conn, url string, mimetype string, body io.Reader) (*client.Request, *http.Response, error) {
-	defer func() {
-		if conn != nil {
-			conn.Stop()
-		}
-	}()
 	headers := make(map[string][]string)
 	headers["Content-Type"] = []string{mimetype}
 	return c.DoRaw(conn, "POST", url, "", headers, body)
@@ -81,12 +67,6 @@ func (c *Client) Post(conn Conn, url string, mimetype string, body io.Reader) (*
 
 // Do sends a http request and returns a response
 func (c *Client) Do(conn Conn, req *http.Request) (*client.Request, *http.Response, error) {
-	defer func() {
-		if conn != nil {
-			conn.Stop()
-		}
-	}()
-
 	method := req.Method
 	headers := req.Header
 	url := req.URL.String()
@@ -97,12 +77,6 @@ func (c *Client) Do(conn Conn, req *http.Request) (*client.Request, *http.Respon
 
 // Dor sends a retryablehttp request and returns the response
 func (c *Client) Dor(conn Conn, req *retryablehttp.Request) (*client.Request, *http.Response, error) {
-	defer func() {
-		if conn != nil {
-			conn.Stop()
-		}
-	}()
-
 	method := req.Method
 	headers := req.Header
 	url := req.URL.String()
@@ -113,12 +87,6 @@ func (c *Client) Dor(conn Conn, req *retryablehttp.Request) (*client.Request, *h
 
 // DoRaw does a raw request with some configuration
 func (c *Client) DoRaw(conn Conn, method, url, uripath string, headers map[string][]string, body io.Reader) (*client.Request, *http.Response, error) {
-	defer func() {
-		if conn != nil {
-			conn.Stop()
-		}
-	}()
-
 	redirectStatus := &RedirectStatus{
 		FollowRedirects: c.Options.FollowRedirects,
 		MaxRedirects:    c.Options.MaxRedirects,
@@ -128,12 +96,6 @@ func (c *Client) DoRaw(conn Conn, method, url, uripath string, headers map[strin
 
 // DoRawWithOptions performs a raw request with additional options
 func (c *Client) DoRawWithOptions(conn Conn, method, url, uripath string, headers map[string][]string, body io.Reader, options *Options) (*client.Request, *http.Response, error) {
-	defer func() {
-		if conn != nil {
-			conn.Stop()
-		}
-	}()
-
 	redirectStatus := &RedirectStatus{
 		FollowRedirects: options.FollowRedirects,
 		MaxRedirects:    c.Options.MaxRedirects,
