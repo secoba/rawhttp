@@ -29,24 +29,28 @@ type readCloser struct {
 
 func toRequest(method string, host, path string, query []string, headers map[string][]string, body io.Reader, options *Options) *client.Request {
 	if len(options.CustomRawBytes) > 0 {
+		seperator := "\n"
+		if bytes.Contains(options.CustomRawBytes, []byte("\r\n")) {
+			seperator = "\r\n"
+		}
+		multiSeperator := append([]byte(seperator), []byte(seperator)...)
 		if options.AutomaticHostHeader || options.AutomaticContentLength {
 			var (
 				hasHost   bool
 				hasLength bool
 			)
 
-			buffer := new(bytes.Buffer)
-			bufferArr := bytes.SplitN(options.CustomRawBytes, []byte("\r\n\r\n"), 2)
+			bufferArr := bytes.SplitN(options.CustomRawBytes, multiSeperator, 2)
 			if options.AutomaticHostHeader {
-				reg := regexp.MustCompile("(?i)(host:\\s*(.*)\r\n)")
+				reg := regexp.MustCompile("(?i)(host:\\s*(.*))")
 				ret := reg.FindString(string(bufferArr[0]))
 				if len(ret) > 0 {
 					hasHost = true
-					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(host))
+					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Host: %s", host)))
 				}
 			}
 			if options.AutomaticContentLength {
-				reg := regexp.MustCompile("(?i)(content-length:\\s*(\\d+)\r\n)")
+				reg := regexp.MustCompile("(?i)(content-length:\\s+(\\d+))")
 				ret := reg.FindString(string(bufferArr[0]))
 				if len(ret) > 0 {
 					hasLength = true
@@ -54,8 +58,12 @@ func toRequest(method string, host, path string, query []string, headers map[str
 				}
 			}
 
-			buffer.Write(bufferArr[0])
-			buffer.WriteString("\r\n")
+			buffer := new(bytes.Buffer)
+			prePkg := bytes.Split(bufferArr[0], []byte(seperator))
+			for i := 0; i < len(prePkg); i++ {
+				buffer.Write(prePkg[i])
+				buffer.WriteString("\r\n")
+			}
 			if !hasHost {
 				buffer.WriteString(fmt.Sprintf("Host: %sf", host))
 				buffer.WriteString("\r\n")
