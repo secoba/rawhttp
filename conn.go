@@ -1,5 +1,6 @@
 package rawhttp
 
+import "C"
 import (
 	"context"
 	"crypto/tls"
@@ -24,8 +25,8 @@ type Dialer interface {
 }
 
 type dialer struct {
-	sync.Mutex                   // protects following fields
-	conns      map[string][]Conn // maps addr to a, possibly empty, slice of existing Conns
+	sync.Mutex // protects following fields
+	//conns      map[string][]Conn // maps addr to a, possibly empty, slice of existing Conns
 }
 
 func (d *dialer) Dial(protocol, addr string, options *Options) (Conn, error) {
@@ -38,17 +39,17 @@ func (d *dialer) DialTimeout(protocol, addr string, timeout time.Duration, optio
 
 func (d *dialer) dialTimeout(protocol, addr string, timeout time.Duration, options *Options) (Conn, error) {
 	d.Lock()
-	if d.conns == nil {
-		d.conns = make(map[string][]Conn)
-	}
-	if c, ok := d.conns[addr]; ok {
-		if len(c) > 0 {
-			conn2 := c[0]
-			c[0] = c[len(c)-1]
-			d.Unlock()
-			return conn2, nil
-		}
-	}
+	//if d.conns == nil {
+	//	d.conns = make(map[string][]Conn)
+	//}
+	//if c, ok := d.conns[addr]; ok {
+	//	if len(c) > 0 {
+	//		conn2 := c[0]
+	//		c[0] = c[len(c)-1]
+	//		d.Unlock()
+	//		return conn2, nil
+	//	}
+	//}
 	d.Unlock()
 	c, err := clientDial(protocol, addr, timeout, options)
 	return &conn{
@@ -180,21 +181,18 @@ type conn struct {
 }
 
 func (c *conn) Release() {
-	c.dialer.Lock()
-	defer c.dialer.Unlock()
-	addr := c.Conn.RemoteAddr().String()
-	c.dialer.conns[addr] = append(c.dialer.conns[addr], c)
+	//c.dialer.Lock()
+	//defer c.dialer.Unlock()
+	//addr := c.Conn.RemoteAddr().String()
+	//c.dialer.conns[addr] = append(c.dialer.conns[addr], c)
 }
 
 func (c *conn) Stop() error {
-	return c.Close()
+	return c.Conn.Close()
 }
 
 func (c *conn) SetTimeout(timeout time.Duration) {
-	_ = c.SetDeadline(time.Now().Add(timeout))
-	_ = c.SetReadDeadline(time.Now().Add(timeout))
-	_ = c.SetWriteDeadline(time.Now().Add(timeout))
-	//_ = c.Conn.SetDeadline(time.Now().Add(timeout))
-	//_ = c.Conn.SetReadDeadline(time.Now().Add(timeout))
-	//_ = c.Conn.SetWriteDeadline(time.Now().Add(timeout))
+	_ = c.Conn.SetDeadline(time.Now().Add(timeout))
+	//_ = c.SetReadDeadline(time.Now().Add(timeout))
+	//_ = c.SetWriteDeadline(time.Now().Add(timeout))
 }
