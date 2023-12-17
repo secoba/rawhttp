@@ -170,7 +170,7 @@ type Conn interface {
 
 	SetTimeout(duration time.Duration)
 	Release()
-	//Stop() error
+	Stop() error
 }
 
 type conn struct {
@@ -186,9 +186,9 @@ func (c *conn) Release() {
 	c.dialer.conns[addr] = append(c.dialer.conns[addr], c)
 }
 
-//func (c *conn) Stop() error {
-//	return c.Conn.Close()
-//}
+func (c *conn) Stop() error {
+	return c.Close()
+}
 
 func (c *conn) SetTimeout(timeout time.Duration) {
 	_ = c.SetDeadline(time.Now().Add(timeout))
