@@ -1,6 +1,5 @@
 package pkg
 
-import "C"
 import (
 	"context"
 	"crypto/tls"
