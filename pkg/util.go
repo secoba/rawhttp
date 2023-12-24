@@ -1,4 +1,4 @@
-package rawhttp
+package pkg
 
 import (
 	"bytes"
@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	urlutil "github.com/projectdiscovery/utils/url"
-	"github.com/secoba/rawhttp/client"
+	"github.com/secoba/rawhttp/pkg/client"
 )
 
 // StatusError is a HTTP status error object

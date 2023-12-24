@@ -1,4 +1,4 @@
-package rawhttp
+package pkg
 
 import "C"
 import (
@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/projectdiscovery/fastdialer/fastdialer"
-	"github.com/secoba/rawhttp/client"
-	"github.com/secoba/rawhttp/proxy"
+	"github.com/secoba/rawhttp/pkg/client"
+	"github.com/secoba/rawhttp/pkg/proxy"
 )
 
 // Dialer can dial a remote HTTP server.

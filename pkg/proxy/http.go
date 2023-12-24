@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/projectdiscovery/fastdialer/fastdialer"
-	"github.com/secoba/rawhttp/client"
+	"github.com/secoba/rawhttp/pkg/client"
 )
 
 func httpDialer(proxyAddr string, timeout time.Duration, fd *fastdialer.Dialer) DialFunc {

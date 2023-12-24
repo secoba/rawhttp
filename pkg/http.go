@@ -1,7 +1,7 @@
-package rawhttp
+package pkg
 
 import (
-	"github.com/secoba/rawhttp/client"
+	"github.com/secoba/rawhttp/pkg/client"
 	"io"
 	"net/http"
 
