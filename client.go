@@ -10,7 +10,7 @@ import (
 	"github.com/projectdiscovery/gologger"
 	retryablehttp "github.com/projectdiscovery/retryablehttp-go"
 	urlutil "github.com/projectdiscovery/utils/url"
-	"github.com/secoba/rawhttp/pkg/client"
+	"github.com/secoba/rawhttp/client"
 )
 
 // Client is a client for making raw http requests with go

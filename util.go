@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	urlutil "github.com/projectdiscovery/utils/url"
-	"github.com/secoba/rawhttp/pkg/client"
+	"github.com/secoba/rawhttp/client"
 )
 
 // StatusError is a HTTP status error object

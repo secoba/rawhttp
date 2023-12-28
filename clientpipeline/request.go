@@ -7,7 +7,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/secoba/rawhttp/pkg/client"
+	"github.com/secoba/rawhttp/client"
 )
 
 var (

@@ -7,7 +7,7 @@ import (
 
 	retryablehttp "github.com/projectdiscovery/retryablehttp-go"
 	urlutil "github.com/projectdiscovery/utils/url"
-	"github.com/secoba/rawhttp/pkg/clientpipeline"
+	"github.com/secoba/rawhttp/clientpipeline"
 )
 
 // PipelineClient is a client for making pipelined http requests

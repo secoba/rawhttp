@@ -3,7 +3,7 @@ package pkg
 import (
 	"time"
 
-	"github.com/secoba/rawhttp/pkg/clientpipeline"
+	"github.com/secoba/rawhttp/clientpipeline"
 )
 
 // PipelineOptions contains options for pipelined http client
