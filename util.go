@@ -37,10 +37,15 @@ func toRequest(method string, host, path string, query []string, headers map[str
 		if options.AutomaticHostHeader || options.AutomaticContentLength {
 			var (
 				hasHost   bool
+				hasBody   bool
 				hasLength bool
 			)
 
 			bufferArr := bytes.SplitN(options.CustomRawBytes, multiSeperator, 2)
+			if len(bufferArr) == 2 {
+				hasBody = true
+			}
+
 			if options.AutomaticHostHeader {
 				reg := regexp.MustCompile("(?i)(host:\\s*(.*))")
 				ret := reg.FindString(string(bufferArr[0]))
@@ -54,7 +59,9 @@ func toRequest(method string, host, path string, query []string, headers map[str
 				ret := reg.FindString(string(bufferArr[0]))
 				if len(ret) > 0 {
 					hasLength = true
-					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
+					if hasBody {
+						bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
+					}
 				}
 			}
 
@@ -70,7 +77,7 @@ func toRequest(method string, host, path string, query []string, headers map[str
 				buffer.WriteString(fmt.Sprintf("Host: %sf", host))
 				buffer.WriteString("\r\n")
 			}
-			if !hasLength {
+			if !hasLength && hasBody {
 				buffer.WriteString(fmt.Sprintf("Content-Length: %d", len(bufferArr[1])))
 				buffer.WriteString("\r\n")
 			}
@@ -78,11 +85,14 @@ func toRequest(method string, host, path string, query []string, headers map[str
 			buffer.WriteString("\r\n")
 
 			// body
-			sufPkg := bytes.Split(bufferArr[1], []byte(seperator))
-			for i := 0; i < len(sufPkg); i++ {
-				buffer.Write(sufPkg[i])
-				buffer.WriteString("\r\n")
+			if hasBody {
+				sufPkg := bytes.Split(bufferArr[1], []byte(seperator))
+				for i := 0; i < len(sufPkg); i++ {
+					buffer.Write(sufPkg[i])
+					buffer.WriteString("\r\n")
+				}
 			}
+
 			options.CustomRawBytes = buffer.Bytes()
 
 		} /*else {
