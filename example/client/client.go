@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/remeh/sizedwaitgroup"
-	"github.com/secoba/rawhttp"
+	rawhttp "github.com/secoba/rawhttp"
 )
 
 func main() {
@@ -26,6 +26,9 @@ func main() {
 			}
 			req.Host = "scanme.sh"
 			req.Header.Set("Host", "scanme.sh")
+
+			//pipeclient.DoRaw("", "", "", nil, nil, nil)
+
 			_, resp, err := pipeclient.Do(req)
 			if err != nil {
 				log.Printf("Error sending request to API endpoint. %+v", err)

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 
 	"github.com/secoba/rawhttp/client"
@@ -42,6 +43,8 @@ type Request struct {
 	Headers []Header
 
 	Body io.Reader
+
+	RawBytes []byte
 }
 
 // ContentLength returns the length of the body. If the body length is not known
@@ -62,6 +65,11 @@ func (r *Request) ContentLength() int64 {
 }
 
 func (r *Request) Write(w *bufio.Writer) error {
+	if r.RawBytes != nil && len(r.RawBytes) > 0 {
+		_, err := w.Write(r.RawBytes)
+		return err
+	}
+
 	q := strings.Join(r.Query, "&")
 	if len(q) > 0 {
 		q = "?" + q
@@ -118,14 +126,74 @@ func (r *Request) Write(w *bufio.Writer) error {
 	return err
 }
 
-func ToRequest(method string, path string, query []string, headers map[string][]string, body io.Reader) *Request {
+func ToRequest(method, host, path string, query []string, headers map[string][]string, body io.Reader, raw []byte, autoHost, autoLength bool) *Request {
+	if len(raw) > 0 {
+		seperator := "\n"
+		if bytes.Contains(raw, []byte("\r\n")) {
+			seperator = "\r\n"
+		}
+		multiSeperator := append([]byte(seperator), []byte(seperator)...)
+		if autoHost || autoLength {
+			var (
+				hasHost   bool
+				hasLength bool
+			)
+
+			bufferArr := bytes.SplitN(raw, multiSeperator, 2)
+			if autoHost {
+				reg := regexp.MustCompile("(?i)(host:\\s*(.*))")
+				ret := reg.FindString(string(bufferArr[0]))
+				if len(ret) > 0 {
+					hasHost = true
+					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Host: %s", host)))
+				}
+			}
+			if autoLength {
+				reg := regexp.MustCompile("(?i)(content-length:\\s+(\\d+))")
+				ret := reg.FindString(string(bufferArr[0]))
+				if len(ret) > 0 {
+					hasLength = true
+					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
+				}
+			}
+
+			buffer := new(bytes.Buffer)
+
+			// pkg prefix
+			prePkg := bytes.Split(bufferArr[0], []byte(seperator))
+			for i := 0; i < len(prePkg); i++ {
+				buffer.Write(prePkg[i])
+				buffer.WriteString("\r\n")
+			}
+			if !hasHost {
+				buffer.WriteString(fmt.Sprintf("Host: %sf", host))
+				buffer.WriteString("\r\n")
+			}
+			if !hasLength {
+				buffer.WriteString(fmt.Sprintf("Content-Length: %d", len(bufferArr[1])))
+				buffer.WriteString("\r\n")
+			}
+
+			buffer.WriteString("\r\n")
+
+			// body
+			sufPkg := bytes.Split(bufferArr[1], []byte(seperator))
+			for i := 0; i < len(sufPkg); i++ {
+				buffer.Write(sufPkg[i])
+				buffer.WriteString("\r\n")
+			}
+			raw = buffer.Bytes()
+		}
+	}
+
 	return &Request{
-		Method:  method,
-		Path:    path,
-		Query:   query,
-		Version: HTTP_1_1,
-		Headers: toHeaders(headers),
-		Body:    body,
+		Method:   method,
+		Path:     path,
+		Query:    query,
+		Version:  HTTP_1_1,
+		Headers:  toHeaders(headers),
+		Body:     body,
+		RawBytes: raw,
 	}
 }
 

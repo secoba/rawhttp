@@ -34,19 +34,19 @@ func NewPipelineClient(ctx context.Context, options PipelineOptions) *PipelineCl
 
 // Head makes a HEAD request to a given URL
 func (c *PipelineClient) Head(url string) (*clientpipeline.Request, *http.Response, error) {
-	return c.DoRaw("HEAD", url, "", nil, nil)
+	return c.DoRaw("HEAD", url, "", nil, nil, nil)
 }
 
 // Get makes a GET request to a given URL
 func (c *PipelineClient) Get(url string) (*clientpipeline.Request, *http.Response, error) {
-	return c.DoRaw("GET", url, "", nil, nil)
+	return c.DoRaw("GET", url, "", nil, nil, nil)
 }
 
 // Post makes a POST request to a given URL
 func (c *PipelineClient) Post(url string, mimetype string, body io.Reader) (*clientpipeline.Request, *http.Response, error) {
 	headers := make(map[string][]string)
 	headers["Content-Type"] = []string{mimetype}
-	return c.DoRaw("POST", url, "", headers, body)
+	return c.DoRaw("POST", url, "", headers, body, nil)
 }
 
 // Do sends a http request and returns a response
@@ -55,7 +55,7 @@ func (c *PipelineClient) Do(req *http.Request) (*clientpipeline.Request, *http.R
 	headers := req.Header
 	url := req.URL.String()
 	body := req.Body
-	return c.DoRaw(method, url, "", headers, body)
+	return c.DoRaw(method, url, "", headers, body, nil)
 }
 
 // Dor sends a retryablehttp request and returns a response
@@ -65,20 +65,20 @@ func (c *PipelineClient) Dor(req *retryablehttp.Request) (*clientpipeline.Reques
 	url := req.URL.String()
 	body := req.Body
 
-	return c.do(method, url, "", headers, body, c.options)
+	return c.do(method, url, "", headers, body, nil, c.options)
 }
 
 // DoRaw does a raw request with some configuration
-func (c *PipelineClient) DoRaw(method, url, uripath string, headers map[string][]string, body io.Reader) (*clientpipeline.Request, *http.Response, error) {
-	return c.do(method, url, uripath, headers, body, c.options)
+func (c *PipelineClient) DoRaw(method, url, uripath string, headers map[string][]string, body io.Reader, raw []byte) (*clientpipeline.Request, *http.Response, error) {
+	return c.do(method, url, uripath, headers, body, raw, c.options)
 }
 
 // DoRawWithOptions performs a raw request with additional options
-func (c *PipelineClient) DoRawWithOptions(method, url, uripath string, headers map[string][]string, body io.Reader, options PipelineOptions) (*clientpipeline.Request, *http.Response, error) {
-	return c.do(method, url, uripath, headers, body, options)
+func (c *PipelineClient) DoRawWithOptions(method, url, uripath string, headers map[string][]string, body io.Reader, raw []byte, options PipelineOptions) (*clientpipeline.Request, *http.Response, error) {
+	return c.do(method, url, uripath, headers, body, raw, options)
 }
 
-func (c *PipelineClient) do(method, url, uripath string, headers map[string][]string, body io.Reader, options PipelineOptions) (*clientpipeline.Request, *http.Response, error) {
+func (c *PipelineClient) do(method, url, uripath string, headers map[string][]string, body io.Reader, raw []byte, options PipelineOptions) (*clientpipeline.Request, *http.Response, error) {
 	if headers == nil {
 		headers = make(map[string][]string)
 	}
@@ -99,7 +99,9 @@ func (c *PipelineClient) do(method, url, uripath string, headers map[string][]st
 		path = uripath
 	}
 
-	req := clientpipeline.ToRequest(method, path, nil, headers, body)
+	req := clientpipeline.ToRequest(
+		method, u.Host, path, nil, headers, body,
+		raw, options.AutomaticHostHeader, options.AutomaticContentLength)
 	var resp clientpipeline.Response
 
 	err = c.client.Do(req, &resp)

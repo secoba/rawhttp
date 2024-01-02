@@ -3,9 +3,10 @@ package main
 import (
 	"encoding/hex"
 	"fmt"
-	"github.com/secoba/rawhttp"
 	"net/http/httputil"
 	"time"
+
+	rawhttp "github.com/secoba/rawhttp"
 )
 
 func main() {
