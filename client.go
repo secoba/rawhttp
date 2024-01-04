@@ -50,19 +50,19 @@ func NewClient(options *Options) *Client {
 
 // Head makes a HEAD request to a given URL
 func (c *Client) Head(conn Conn, url string) (*client.Request, *http.Response, error) {
-	return c.DoRaw(conn, "HEAD", url, "", nil, nil)
+	return c.DoRaw(conn, "HEAD", url, "", nil, nil, nil)
 }
 
 // Get makes a GET request to a given URL
 func (c *Client) Get(conn Conn, url string) (*client.Request, *http.Response, error) {
-	return c.DoRaw(conn, "GET", url, "", nil, nil)
+	return c.DoRaw(conn, "GET", url, "", nil, nil, nil)
 }
 
 // Post makes a POST request to a given URL
 func (c *Client) Post(conn Conn, url string, mimetype string, body io.Reader) (*client.Request, *http.Response, error) {
 	headers := make(map[string][]string)
 	headers["Content-Type"] = []string{mimetype}
-	return c.DoRaw(conn, "POST", url, "", headers, body)
+	return c.DoRaw(conn, "POST", url, "", headers, body, nil)
 }
 
 // Do sends a http request and returns a response
@@ -72,7 +72,7 @@ func (c *Client) Do(conn Conn, req *http.Request) (*client.Request, *http.Respon
 	url := req.URL.String()
 	body := req.Body
 
-	return c.DoRaw(conn, method, url, "", headers, body)
+	return c.DoRaw(conn, method, url, "", headers, body, nil)
 }
 
 // Dor sends a retryablehttp request and returns the response
@@ -82,25 +82,26 @@ func (c *Client) Dor(conn Conn, req *retryablehttp.Request) (*client.Request, *h
 	url := req.URL.String()
 	body := req.Body
 
-	return c.DoRaw(conn, method, url, "", headers, body)
+	return c.DoRaw(conn, method, url, "", headers, body, nil)
 }
 
 // DoRaw does a raw request with some configuration
-func (c *Client) DoRaw(conn Conn, method, url, uripath string, headers map[string][]string, body io.Reader) (*client.Request, *http.Response, error) {
+func (c *Client) DoRaw(conn Conn, method, url, uripath string, headers map[string][]string, body io.Reader, rawBuffer []byte) (*client.Request, *http.Response, error) {
 	redirectStatus := &RedirectStatus{
 		FollowRedirects: c.Options.FollowRedirects,
 		MaxRedirects:    c.Options.MaxRedirects,
 	}
-	return c.do(conn, method, url, uripath, headers, body, redirectStatus, c.Options)
+	return c.do(conn, method, url, uripath, headers, body, rawBuffer, redirectStatus, c.Options)
 }
 
 // DoRawWithOptions performs a raw request with additional options
-func (c *Client) DoRawWithOptions(conn Conn, method, url, uripath string, headers map[string][]string, body io.Reader, options *Options) (*client.Request, *http.Response, error) {
+func (c *Client) DoRawWithOptions(conn Conn, method, url, uripath string,
+	headers map[string][]string, body io.Reader, rawBuffer []byte, options *Options) (*client.Request, *http.Response, error) {
 	redirectStatus := &RedirectStatus{
 		FollowRedirects: options.FollowRedirects,
 		MaxRedirects:    c.Options.MaxRedirects,
 	}
-	return c.do(conn, method, url, uripath, headers, body, redirectStatus, options)
+	return c.do(conn, method, url, uripath, headers, body, rawBuffer, redirectStatus, options)
 }
 
 // Close closes client and any resources it holds
@@ -182,7 +183,7 @@ func (c *Client) CreateConnection(url string, options *Options) (Conn, error) {
 }
 
 func (c *Client) do(getConn Conn, method, url, uripath string, headers map[string][]string,
-	body io.Reader, redirectStatus *RedirectStatus, options *Options) (*client.Request, *http.Response, error) {
+	body io.Reader, rawBuffer []byte, redirectStatus *RedirectStatus, options *Options) (*client.Request, *http.Response, error) {
 
 	protocol := "http"
 	if strings.HasPrefix(strings.ToLower(url), "https://") {
@@ -238,7 +239,7 @@ func (c *Client) do(getConn Conn, method, url, uripath string, headers map[strin
 	//	getConn.SetTimeout(options.Timeout)
 	//}
 
-	req := toRequest(method, u.Host, path, nil, headers, body, options)
+	req := toRequest(method, u.Host, path, nil, headers, body, rawBuffer, options)
 	req.AutomaticContentLength = options.AutomaticContentLength
 	req.AutomaticHost = options.AutomaticHostHeader
 
@@ -267,7 +268,7 @@ func (c *Client) do(getConn Conn, method, url, uripath string, headers map[strin
 			loc = fmt.Sprintf("%s://%s%s", protocol, host, loc)
 		}
 		redirectStatus.Current++
-		return c.do(getConn, method, loc, uripath, headers, body, redirectStatus, options)
+		return c.do(getConn, method, loc, uripath, headers, body, rawBuffer, redirectStatus, options)
 	}
 
 	return req, r, err

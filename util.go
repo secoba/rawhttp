@@ -27,8 +27,77 @@ type readCloser struct {
 	io.Closer
 }
 
-func toRequest(method string, host, path string, query []string, headers map[string][]string, body io.Reader, options *Options) *client.Request {
-	if len(options.CustomRawBytes) > 0 {
+func toRequest(method string, host, path string, query []string,
+	headers map[string][]string, body io.Reader, raw []byte, options *Options) *client.Request {
+	var rawBuffer []byte
+	if raw != nil && len(raw) > 0 {
+		seperator := "\n"
+		if bytes.Contains(raw, []byte("\r\n")) {
+			seperator = "\r\n"
+		}
+		multiSeperator := append([]byte(seperator), []byte(seperator)...)
+		if options.AutomaticHostHeader || options.AutomaticContentLength {
+			var (
+				hasHost   bool
+				hasBody   bool
+				hasLength bool
+			)
+
+			bufferArr := bytes.SplitN(raw, multiSeperator, 2)
+			if len(bufferArr) == 2 {
+				hasBody = true
+			}
+
+			if options.AutomaticHostHeader {
+				reg := regexp.MustCompile("(?i)(host:\\s*(.*))")
+				ret := reg.FindString(string(bufferArr[0]))
+				if len(ret) > 0 {
+					hasHost = true
+					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Host: %s", host)))
+				}
+			}
+			if options.AutomaticContentLength {
+				reg := regexp.MustCompile("(?i)(content-length:\\s+(\\d+))")
+				ret := reg.FindString(string(bufferArr[0]))
+				if len(ret) > 0 {
+					hasLength = true
+					if hasBody {
+						bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
+					}
+				}
+			}
+
+			buffer := new(bytes.Buffer)
+
+			// pkg prefix
+			prePkg := bytes.Split(bufferArr[0], []byte(seperator))
+			for i := 0; i < len(prePkg); i++ {
+				buffer.Write(prePkg[i])
+				buffer.WriteString("\r\n")
+			}
+			if !hasHost {
+				buffer.WriteString(fmt.Sprintf("Host: %sf", host))
+				buffer.WriteString("\r\n")
+			}
+			if !hasLength && hasBody {
+				buffer.WriteString(fmt.Sprintf("Content-Length: %d", len(bufferArr[1])))
+				buffer.WriteString("\r\n")
+			}
+
+			buffer.WriteString("\r\n")
+
+			// body
+			if hasBody {
+				sufPkg := bytes.Split(bufferArr[1], []byte(seperator))
+				for i := 0; i < len(sufPkg); i++ {
+					buffer.Write(sufPkg[i])
+					buffer.WriteString("\r\n")
+				}
+			}
+
+			rawBuffer = buffer.Bytes()
+		}
+	} else if len(options.CustomRawBytes) > 0 {
 		seperator := "\n"
 		if bytes.Contains(options.CustomRawBytes, []byte("\r\n")) {
 			seperator = "\r\n"
@@ -93,12 +162,11 @@ func toRequest(method string, host, path string, query []string, headers map[str
 				}
 			}
 
-			options.CustomRawBytes = buffer.Bytes()
-
-		} /*else {
-			return &client.Request{RawBytes: options.CustomRawBytes}
-		}*/
+			rawBuffer = buffer.Bytes()
+			//options.CustomRawBytes = buffer.Bytes()
+		}
 	}
+
 	reqHeaders := toHeaders(headers)
 	if len(options.CustomHeaders) > 0 {
 		reqHeaders = options.CustomHeaders
@@ -111,7 +179,7 @@ func toRequest(method string, host, path string, query []string, headers map[str
 		Version:  client.HTTP_1_1,
 		Headers:  reqHeaders,
 		Body:     body,
-		RawBytes: options.CustomRawBytes,
+		RawBytes: rawBuffer,
 	}
 }
 
@@ -177,7 +245,7 @@ func firstErr(err1, err2 error) error {
 }
 
 // DumpRequestRaw to string
-func DumpRequestRaw(method, url, uripath string, headers map[string][]string, body io.Reader, options *Options) ([]byte, error) {
+func DumpRequestRaw(method, url, uripath string, headers map[string][]string, body io.Reader, rawBuffer []byte, options *Options) ([]byte, error) {
 	if len(options.CustomRawBytes) > 0 {
 		return options.CustomRawBytes, nil
 	}
@@ -209,7 +277,7 @@ func DumpRequestRaw(method, url, uripath string, headers map[string][]string, bo
 		path = uripath
 	}
 
-	req := toRequest(method, u.Host, path, nil, headers, body, options)
+	req := toRequest(method, u.Host, path, nil, headers, body, rawBuffer, options)
 	b := strings.Builder{}
 
 	q := strings.Join(req.Query, "&")

@@ -1,6 +1,8 @@
 module github.com/secoba/rawhttp
 
-go 1.20
+go 1.21
+
+toolchain go1.21.3
 
 require (
 	github.com/projectdiscovery/fastdialer v0.0.48

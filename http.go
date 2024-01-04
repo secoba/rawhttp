@@ -35,11 +35,11 @@ func Dor(conn Conn, req *retryablehttp.Request) (*client.Request, *http.Response
 }
 
 // DoRaw does a raw request with some configuration
-func DoRaw(conn Conn, method, url, uripath string, headers map[string][]string, body io.Reader) (*client.Request, *http.Response, error) {
-	return DefaultClient.DoRaw(conn, method, url, uripath, headers, body)
+func DoRaw(conn Conn, method, url, uripath string, headers map[string][]string, body io.Reader, rawBuffer []byte) (*client.Request, *http.Response, error) {
+	return DefaultClient.DoRaw(conn, method, url, uripath, headers, body, rawBuffer)
 }
 
 // DoRawWithOptions does a raw request with some configuration
-func DoRawWithOptions(conn Conn, method, url, uripath string, headers map[string][]string, body io.Reader, options *Options) (*client.Request, *http.Response, error) {
-	return DefaultClient.DoRawWithOptions(conn, method, url, uripath, headers, body, options)
+func DoRawWithOptions(conn Conn, method, url, uripath string, headers map[string][]string, body io.Reader, rawBuffer []byte, options *Options) (*client.Request, *http.Response, error) {
+	return DefaultClient.DoRawWithOptions(conn, method, url, uripath, headers, body, rawBuffer, options)
 }
