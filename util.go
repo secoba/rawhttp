@@ -80,7 +80,7 @@ func toRequest(method string, host, path string, query []string,
 				buffer.WriteString("\r\n")
 			}
 			if !hasHost {
-				buffer.WriteString(fmt.Sprintf("Host: %sf", host))
+				buffer.WriteString(fmt.Sprintf("Host: %s", host))
 				buffer.WriteString("\r\n")
 			}
 			if !hasLength && hasBody {
