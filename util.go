@@ -59,7 +59,7 @@ func toRequest(method string, host, path string, query []string,
 		)
 
 		bufferArr := bytes.SplitN(raw, multiSeperator, 2)
-		if len(bufferArr) == 2 {
+		if len(bufferArr) == 2 && len(bufferArr[1]) > 0 {
 			hasBody = true
 		}
 
@@ -142,13 +142,12 @@ func toRequest(method string, host, path string, query []string,
 		)
 
 		bufferArr := bytes.SplitN(options.CustomRawBytes, multiSeperator, 2)
-		if len(bufferArr) == 2 {
+		if len(bufferArr) == 2 && len(bufferArr[1]) > 0 {
 			hasBody = true
 		}
 
 		buffer := new(bytes.Buffer)
 
-		// pkg prefix
 		prePkg := bytes.Split(bufferArr[0], []byte(seperator))
 		for i := 0; i < len(prePkg); i++ {
 			buffer.Write(prePkg[i])
