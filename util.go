@@ -30,77 +30,94 @@ type readCloser struct {
 
 func toRequest(method string, host, path string, query []string,
 	headers map[string][]string, body io.Reader, raw []byte, options *Options) *client.Request {
+	if headers == nil {
+		headers = make(map[string][]string, 0)
+	}
 	var (
 		rawBuffer []byte
 		version   = client.HTTP_1_1
 	)
+
+	if len(options.CustomHeaders) > 0 {
+		for _, header := range options.CustomHeaders {
+			headers[header.Key] = []string{header.Value}
+		}
+	}
+	reqHeaders := toHeaders(headers)
+
 	if raw != nil && len(raw) > 0 {
 		seperator := "\n"
 		if bytes.Contains(raw, []byte("\r\n")) {
 			seperator = "\r\n"
 		}
 		multiSeperator := append([]byte(seperator), []byte(seperator)...)
-		if options.AutomaticHostHeader || options.AutomaticContentLength {
-			var (
-				hasHost   bool
-				hasBody   bool
-				hasLength bool
-			)
 
-			bufferArr := bytes.SplitN(raw, multiSeperator, 2)
-			if len(bufferArr) == 2 {
-				hasBody = true
-			}
+		var (
+			hasHost   bool
+			hasBody   bool
+			hasLength bool
+		)
 
-			if options.AutomaticHostHeader {
-				reg := regexp.MustCompile("(?i)(host:\\s*(.*))")
-				ret := reg.FindString(string(bufferArr[0]))
-				if len(ret) > 0 {
-					hasHost = true
-					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Host: %s", host)))
-				}
-			}
-			if options.AutomaticContentLength {
-				reg := regexp.MustCompile("(?i)(content-length:\\s+(\\d+))")
-				ret := reg.FindString(string(bufferArr[0]))
-				if len(ret) > 0 {
-					hasLength = true
-					if hasBody {
-						bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
-					}
-				}
-			}
-
-			buffer := new(bytes.Buffer)
-
-			// pkg prefix
-			prePkg := bytes.Split(bufferArr[0], []byte(seperator))
-			for i := 0; i < len(prePkg); i++ {
-				buffer.Write(prePkg[i])
-				buffer.WriteString("\r\n")
-			}
-			if !hasHost {
-				buffer.WriteString(fmt.Sprintf("Host: %s", host))
-				buffer.WriteString("\r\n")
-			}
-			if !hasLength && hasBody {
-				buffer.WriteString(fmt.Sprintf("Content-Length: %d", len(bufferArr[1])))
-				buffer.WriteString("\r\n")
-			}
-
-			buffer.WriteString("\r\n")
-
-			// body
-			if hasBody {
-				sufPkg := bytes.Split(bufferArr[1], []byte(seperator))
-				for i := 0; i < len(sufPkg); i++ {
-					buffer.Write(sufPkg[i])
-					buffer.WriteString("\r\n")
-				}
-			}
-
-			rawBuffer = buffer.Bytes()
+		bufferArr := bytes.SplitN(raw, multiSeperator, 2)
+		if len(bufferArr) == 2 {
+			hasBody = true
 		}
+
+		buffer := new(bytes.Buffer)
+
+		prePkg := bytes.Split(bufferArr[0], []byte(seperator))
+		for i := 0; i < len(prePkg); i++ {
+			buffer.Write(prePkg[i])
+			buffer.WriteString("\r\n")
+		}
+		for _, header := range reqHeaders {
+			buffer.WriteString(fmt.Sprintf("%s: %s", header.Key, header.Value))
+			buffer.WriteString("\r\n")
+		}
+
+		if options.AutomaticHostHeader {
+			reg := regexp.MustCompile("(?i)(host:\\s*(.*))")
+			ret := reg.FindString(buffer.String())
+			if len(ret) > 0 {
+				hasHost = true
+				buff := bytes.ReplaceAll(buffer.Bytes(), []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Host: %s", host)))
+				buffer.Reset()
+				buffer.Write(buff)
+				// bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Host: %s", host)))
+			}
+		}
+
+		if options.AutomaticContentLength {
+			reg := regexp.MustCompile("(?i)(content-length:\\s+(\\d+))")
+			ret := reg.FindString(buffer.String())
+			if len(ret) > 0 {
+				hasLength = true
+				if hasBody {
+					buff := bytes.ReplaceAll(buffer.Bytes(), []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
+					buffer.Reset()
+					buffer.Write(buff)
+					// bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
+				}
+			}
+		}
+
+		if !hasHost {
+			buffer.WriteString(fmt.Sprintf("Host: %s", host))
+			buffer.WriteString("\r\n")
+		}
+		if !hasLength && hasBody {
+			buffer.WriteString(fmt.Sprintf("Content-Length: %d", len(bufferArr[1])))
+			buffer.WriteString("\r\n")
+		}
+
+		buffer.WriteString("\r\n")
+
+		// body
+		if hasBody {
+			buffer.Write(bufferArr[1])
+		}
+
+		rawBuffer = buffer.Bytes()
 
 		firstLine := bytes.Split(raw, []byte(seperator))[0]
 		headerLine := strings.SplitN(string(firstLine), " ", 3)
@@ -111,75 +128,86 @@ func toRequest(method string, host, path string, query []string,
 				Minor: protoMinor,
 			}
 		}
-
 	} else if len(options.CustomRawBytes) > 0 {
 		seperator := "\n"
 		if bytes.Contains(options.CustomRawBytes, []byte("\r\n")) {
 			seperator = "\r\n"
 		}
 		multiSeperator := append([]byte(seperator), []byte(seperator)...)
-		if options.AutomaticHostHeader || options.AutomaticContentLength {
-			var (
-				hasHost   bool
-				hasBody   bool
-				hasLength bool
-			)
 
-			bufferArr := bytes.SplitN(options.CustomRawBytes, multiSeperator, 2)
-			if len(bufferArr) == 2 {
-				hasBody = true
-			}
+		var (
+			hasHost   bool
+			hasBody   bool
+			hasLength bool
+		)
 
-			if options.AutomaticHostHeader {
-				reg := regexp.MustCompile("(?i)(host:\\s*(.*))")
-				ret := reg.FindString(string(bufferArr[0]))
-				if len(ret) > 0 {
-					hasHost = true
-					bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Host: %s", host)))
-				}
-			}
-			if options.AutomaticContentLength {
-				reg := regexp.MustCompile("(?i)(content-length:\\s+(\\d+))")
-				ret := reg.FindString(string(bufferArr[0]))
-				if len(ret) > 0 {
-					hasLength = true
-					if hasBody {
-						bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
-					}
-				}
-			}
-
-			buffer := new(bytes.Buffer)
-
-			// pkg prefix
-			prePkg := bytes.Split(bufferArr[0], []byte(seperator))
-			for i := 0; i < len(prePkg); i++ {
-				buffer.Write(prePkg[i])
-				buffer.WriteString("\r\n")
-			}
-			if !hasHost {
-				buffer.WriteString(fmt.Sprintf("Host: %sf", host))
-				buffer.WriteString("\r\n")
-			}
-			if !hasLength && hasBody {
-				buffer.WriteString(fmt.Sprintf("Content-Length: %d", len(bufferArr[1])))
-				buffer.WriteString("\r\n")
-			}
-
-			buffer.WriteString("\r\n")
-
-			// body
-			if hasBody {
-				sufPkg := bytes.Split(bufferArr[1], []byte(seperator))
-				for i := 0; i < len(sufPkg); i++ {
-					buffer.Write(sufPkg[i])
-					buffer.WriteString("\r\n")
-				}
-			}
-
-			rawBuffer = buffer.Bytes()
-			//options.CustomRawBytes = buffer.Bytes()
+		bufferArr := bytes.SplitN(options.CustomRawBytes, multiSeperator, 2)
+		if len(bufferArr) == 2 {
+			hasBody = true
 		}
+
+		buffer := new(bytes.Buffer)
+
+		// pkg prefix
+		prePkg := bytes.Split(bufferArr[0], []byte(seperator))
+		for i := 0; i < len(prePkg); i++ {
+			buffer.Write(prePkg[i])
+			buffer.WriteString("\r\n")
+		}
+		for _, header := range reqHeaders {
+			buffer.WriteString(fmt.Sprintf("%s: %s", header.Key, header.Value))
+			buffer.WriteString("\r\n")
+		}
+
+		if options.AutomaticHostHeader {
+			reg := regexp.MustCompile("(?i)(host:\\s*(.*))")
+			ret := reg.FindString(string(bufferArr[0]))
+			if len(ret) > 0 {
+				hasHost = true
+				buff := bytes.ReplaceAll(buffer.Bytes(), []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Host: %s", host)))
+				buffer.Reset()
+				buffer.Write(buff)
+				//bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Host: %s", host)))
+			}
+		}
+
+		if options.AutomaticContentLength {
+			reg := regexp.MustCompile("(?i)(content-length:\\s+(\\d+))")
+			ret := reg.FindString(string(bufferArr[0]))
+			if len(ret) > 0 {
+				hasLength = true
+				if hasBody {
+					buff := bytes.ReplaceAll(buffer.Bytes(), []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
+					buffer.Reset()
+					buffer.Write(buff)
+					//bufferArr[0] = bytes.ReplaceAll(bufferArr[0], []byte(strings.TrimSpace(ret)), []byte(fmt.Sprintf("Content-Length: %d", len(bufferArr[1]))))
+				}
+			}
+		}
+
+		if !hasHost {
+			buffer.WriteString(fmt.Sprintf("Host: %sf", host))
+			buffer.WriteString("\r\n")
+		}
+		if !hasLength && hasBody {
+			buffer.WriteString(fmt.Sprintf("Content-Length: %d", len(bufferArr[1])))
+			buffer.WriteString("\r\n")
+		}
+
+		buffer.WriteString("\r\n")
+
+		// body
+		if hasBody {
+			buffer.Write(bufferArr[1])
+			//sufPkg := bytes.Split(bufferArr[1], []byte(seperator))
+			//for i := 0; i < len(sufPkg); i++ {
+			//	buffer.Write(sufPkg[i])
+			//	buffer.WriteString("\r\n")
+			//}
+		}
+
+		rawBuffer = buffer.Bytes()
+		//options.CustomRawBytes = buffer.Bytes()
 
 		firstLine := bytes.Split(options.CustomRawBytes, []byte(seperator))[0]
 		headerLine := strings.SplitN(string(firstLine), " ", 3)
@@ -190,11 +218,6 @@ func toRequest(method string, host, path string, query []string,
 				Minor: protoMinor,
 			}
 		}
-	}
-
-	reqHeaders := toHeaders(headers)
-	if len(options.CustomHeaders) > 0 {
-		reqHeaders = options.CustomHeaders
 	}
 
 	return &client.Request{
@@ -237,8 +260,8 @@ func toHTTPResponse(conn Conn, resp *client.Response) (*http.Response, error) {
 func toHeaders(h map[string][]string) []client.Header {
 	var r []client.Header
 	for k, v := range h {
-		for _, v := range v {
-			r = append(r, client.Header{Key: k, Value: v})
+		for _, vv := range v {
+			r = append(r, client.Header{Key: k, Value: vv})
 		}
 	}
 	return r
