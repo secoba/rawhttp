@@ -1,9 +1,7 @@
 package main
 
 import (
-	"encoding/hex"
 	"fmt"
-	"net/http/httputil"
 	"time"
 
 	rawhttp "github.com/secoba/rawhttp"
@@ -45,10 +43,11 @@ Content-Length: 365
 	c := rawhttp.NewClient(options)
 	conn, err := c.CreateConnection(urlStr, options)
 	fmt.Println(err)
-	req, res, err := c.DoRaw(conn, "", urlStr, "", nil, nil)
-	fmt.Println(string(req.RawBytes))
-	fmt.Println(hex.Dump(req.RawBytes))
-	r, _ := httputil.DumpResponse(res, true)
-	fmt.Println(string(r))
-	fmt.Println(err)
+	fmt.Println(conn)
+	//req, res, err := c.DoRaw(conn, "", urlStr, "", nil, nil)
+	//fmt.Println(string(req.RawBytes))
+	//fmt.Println(hex.Dump(req.RawBytes))
+	//r, _ := httputil.DumpResponse(res, true)
+	//fmt.Println(string(r))
+	//fmt.Println(err)
 }

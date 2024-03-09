@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 
 	urlutil "github.com/projectdiscovery/utils/url"
@@ -29,7 +30,10 @@ type readCloser struct {
 
 func toRequest(method string, host, path string, query []string,
 	headers map[string][]string, body io.Reader, raw []byte, options *Options) *client.Request {
-	var rawBuffer []byte
+	var (
+		rawBuffer []byte
+		version   = client.HTTP_1_1
+	)
 	if raw != nil && len(raw) > 0 {
 		seperator := "\n"
 		if bytes.Contains(raw, []byte("\r\n")) {
@@ -97,6 +101,17 @@ func toRequest(method string, host, path string, query []string,
 
 			rawBuffer = buffer.Bytes()
 		}
+
+		firstLine := bytes.Split(raw, []byte(seperator))[0]
+		headerLine := strings.SplitN(string(firstLine), " ", 3)
+		if len(headerLine) == 3 {
+			protoMajor, protoMinor, _ := parseHttpVersion(headerLine[2])
+			version = client.Version{
+				Major: protoMajor,
+				Minor: protoMinor,
+			}
+		}
+
 	} else if len(options.CustomRawBytes) > 0 {
 		seperator := "\n"
 		if bytes.Contains(options.CustomRawBytes, []byte("\r\n")) {
@@ -165,6 +180,16 @@ func toRequest(method string, host, path string, query []string,
 			rawBuffer = buffer.Bytes()
 			//options.CustomRawBytes = buffer.Bytes()
 		}
+
+		firstLine := bytes.Split(options.CustomRawBytes, []byte(seperator))[0]
+		headerLine := strings.SplitN(string(firstLine), " ", 3)
+		if len(headerLine) == 3 {
+			protoMajor, protoMinor, _ := parseHttpVersion(headerLine[2])
+			version = client.Version{
+				Major: protoMajor,
+				Minor: protoMinor,
+			}
+		}
 	}
 
 	reqHeaders := toHeaders(headers)
@@ -176,7 +201,7 @@ func toRequest(method string, host, path string, query []string,
 		Method:   method,
 		Path:     path,
 		Query:    query,
-		Version:  client.HTTP_1_1,
+		Version:  version,
 		Headers:  reqHeaders,
 		Body:     body,
 		RawBytes: rawBuffer,
@@ -244,6 +269,27 @@ func firstErr(err1, err2 error) error {
 	return nil
 }
 
+func parseHttpVersion(vers string) (major, minor int, ok bool) {
+	if !strings.HasPrefix(vers, "HTTP/") {
+		return 0, 0, false
+	}
+	if len(vers) != len("HTTP/X.Y") {
+		return 0, 0, false
+	}
+	if vers[6] != '.' {
+		return 0, 0, false
+	}
+	maj, err := strconv.ParseInt(vers[5:6], 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	min, err := strconv.ParseInt(vers[7:8], 10, 64)
+	if err != nil {
+		return 0, 0, false
+	}
+	return int(maj), int(min), true
+}
+
 // DumpRequestRaw to string
 func DumpRequestRaw(method, url, uripath string, headers map[string][]string, body io.Reader, rawBuffer []byte, options *Options) ([]byte, error) {
 	if len(options.CustomRawBytes) > 0 {
@@ -278,7 +324,8 @@ func DumpRequestRaw(method, url, uripath string, headers map[string][]string, bo
 	}
 
 	req := toRequest(method, u.Host, path, nil, headers, body, rawBuffer, options)
-	b := strings.Builder{}
+	//b := strings.Builder{}
+	b := new(bytes.Buffer)
 
 	q := strings.Join(req.Query, "&")
 	if len(q) > 0 {
@@ -305,12 +352,13 @@ func DumpRequestRaw(method, url, uripath string, headers map[string][]string, bo
 	if req.Body != nil {
 		var buf bytes.Buffer
 		tee := io.TeeReader(req.Body, &buf)
-		body, err := io.ReadAll(tee)
-		if err != nil {
-			return nil, err
+		bd, e := io.ReadAll(tee)
+		if e != nil {
+			return nil, e
 		}
-		b.Write(body)
+		b.Write(bd)
 	}
 
-	return []byte(strings.ReplaceAll(b.String(), "\n", client.NewLine)), nil
+	//return []byte(strings.ReplaceAll(b.String(), "\n", client.NewLine)), nil
+	return b.Bytes(), nil //[]byte(strings.ReplaceAll(b.String(), "\n", client.NewLine)), nil
 }
