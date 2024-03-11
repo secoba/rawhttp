@@ -76,7 +76,7 @@ func toRequest(method string, host, path string, query []string,
 		}
 
 		if options.AutomaticHostHeader {
-			reg := regexp.MustCompile("(?i)(host:\\s*(.*))")
+			reg := regexp.MustCompile("(?i)(host:\\s+(.*))")
 			ret := reg.FindString(buffer.String())
 			if len(ret) > 0 {
 				hasHost = true
@@ -101,7 +101,7 @@ func toRequest(method string, host, path string, query []string,
 			}
 		}
 
-		if !hasHost {
+		if !hasHost && options.AutomaticHostHeader {
 			buffer.WriteString(fmt.Sprintf("Host: %s", host))
 			buffer.WriteString("\r\n")
 		}
@@ -184,7 +184,7 @@ func toRequest(method string, host, path string, query []string,
 			}
 		}
 
-		if !hasHost {
+		if !hasHost && options.AutomaticHostHeader {
 			buffer.WriteString(fmt.Sprintf("Host: %sf", host))
 			buffer.WriteString("\r\n")
 		}
